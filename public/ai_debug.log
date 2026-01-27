@@ -1,0 +1,257 @@
+[2026-01-25T07:47:00.683Z] RAW:
+{
+  "topic": "Some people think that technology is making people less social. To what extent do you agree or disagree?",
+  "questionAnalysis": "This is a 'To what extent do you agree or disagree' Task 2 prompt. Key instruction keywords: 'To what extent', 'agree or disagree'. The task requires the writer to take a clear position on whether technology reduces social interaction, address both sides of the argument (if relevant), and support their claims with reasons and examples. Constraints include maintaining a consistent position throughout and ensuring all ideas are extended logically.",
+  "taskType": 2,
+  "overallScore": 6.5,
+  "dimensions": {
+    "taskResponse": {
+      "score": 6.0,
+      "label": "Task Response",
+      "reason": "The essay addresses the core question and presents a clear, consistent position that technology enhances social connectivity when used wisely. It acknowledges a counterargument about excessive device use, fulfilling the 'to what extent' requirement. However, main ideas are underdeveloped—there is no specific evidence, examples, or detailed explanations to support claims (e.g., no mention of specific platforms or real-world scenarios), which limits the depth of the response.",
+      "subItems": {
+        "item1": { "label": "Response to Prompt", "score": 6, "reason": "Addresses all parts of the task by stating a position and acknowledging the opposing view." },
+        "item2": { "label": "Position Clarity", "score": 7, "reason": "The writer’s position is clear and consistent from the introduction to the conclusion." },
+        "item3": { "label": "Idea Development & Support", "score": 5, "reason": "Main ideas are relevant but lack extension; no specific examples or evidence are provided to strengthen claims." },
+        "item4": { "label": "Logic & Generalisation", "score": 6, "reason": "Avoids overgeneralization but fails to elaborate on key points to make arguments more persuasive." }
+      }
+    },
+    "coherenceCohesion": {
+      "score": 6.0,
+      "label": "Coherence & Cohesion",
+      "reason": "The overall progression of ideas is logical, moving from an introductory position to supporting points, a counterargument, and a conclusion. However, the entire essay is presented as a single block, with no clear paragraphing to separate distinct ideas. Cohesive devices are basic and somewhat mechanical (e.g., 'Firstly', 'Secondly', 'However'), and there is limited use of referencing or substitution to avoid repetition.",
+      "subItems": {
+        "item1": { 
+          "label": "Logical Sequencing", 
+          "score": 6, 
+          "reason": "Ideas follow a logical flow: position → supporting points → counterargument → conclusion." 
+        },
+        "item2": { 
+          "label": "Paragraphing", 
+          "score": 5, 
+          "reason": "No paragraphing is used, making it difficult to distinguish between distinct ideas and weakening overall readability." 
+        },
+        "item3": { 
+          "label": "Cohesive Devices", 
+          "score": 6, 
+          "reason": "Basic linking words are used effectively but are repetitive and lack sophistication (e.g., overreliance on 'firstly', 'secondly')." 
+        },
+        "item4": { 
+          "label": "Referencing & Substitution", 
+          "score": 6, 
+          "reason": "Uses pronouns like 'it' to refer to technology, but there is no attempt to substitute repeated terms (e.g., 'social connectivity' could be replaced with 'interpersonal bonds' in later sentences)." 
+        }
+      }
+    },
+    "lexicalResource": {
+      "score": 6.5,
+      "label": "Lexical Resource",
+      "reason": "The essay uses an adequate range of vocabulary to convey meaning clearly, with no major errors in word choice or spelling. Terms like 'revolutionized', 'enhances', and 'connectivity' are appropriate for the topic, but there is a lack of less common or topic-specific lexical items. Precision is generally good, though some phrases are overly simplistic.",
+      "subItems": {
+        "item1": { 
+          "label": "Range & Variety", 
+          "score": 6, 
+          "reason": "Adequate range but no use of rare or idiomatic vocabulary; some opportunities to replace simplistic terms (e.g., 'stay in touch' with 'maintain meaningful contact')." 
+        },
+        "item2": { 
+          "label": "Precision & Appropriacy", 
+          "score": 7, 
+          "reason": "Word choices are appropriate for the academic context, and meaning is never obscured by incorrect vocabulary." 
+        },
+        "item3": { 
+          "label": "Collocation & Idiomaticity", 
+          "score": 6, 
+          "reason": "Uses basic collocations (e.g., 'stay in touch', 'face-to-face interaction') but no complex or less common collocations (e.g., 'foster interpersonal bonds', 'digital alienation')." 
+        },
+        "item4": { 
+          "label": "Spelling & Word Formation", 
+          "score": 7, 
+          "reason": "No spelling errors or incorrect word formation; all terms are spelled correctly and used in the right form." 
+        }
+      }
+    },
+    "grammaticalRangeAccuracy": {
+      "score": 6.5,
+      "label": "Grammatical Range & Accuracy",
+      "reason": "The essay uses a mix of simple, compound, and some complex sentence structures (e.g., the opening dependent clause 'While some argue that it isolates individuals'). Most sentences are error-free, and any minor issues do not impede communication. However, there is limited use of more sophisticated complex structures (e.g., relative clauses, conditionals) to demonstrate greater control.",
+      "subItems": {
+        "item1": { 
+          "label": "Sentence Variety", 
+          "score": 6, 
+          "reason": "Uses a mix of simple and complex sentences but relies heavily on basic structures; few attempts at more complex forms like inverted conditionals or participial phrases." 
+        },
+        "item2": { 
+          "label": "Grammar Accuracy", 
+          "score": 7, 
+          "reason": "The majority of sentences are error-free; no critical grammatical mistakes that confuse the reader." 
+        },
+        "item3": { 
+          "label": "Control & Complexity", 
+          "score": 6, 
+          "reason": "Shows control over basic complex structures but avoids taking risks with more advanced forms, limiting demonstration of grammatical range." 
+        },
+        "item4": { 
+          "label": "Punctuation", 
+          "score": 7, 
+          "reason": "Punctuation is used correctly to separate clauses and enhance readability." 
+        }
+      }
+    }
+  },
+"paragraphRewrites": [
+  {
+    "paragraphType": "Introduction",
+    "focus": "Task 2: Context & Thesis Statement",
+    "critique": "The original introduction lacks contextual depth and merges with body points. It fails to set up the broader debate about technology’s impact on social interaction, which weakens Task Response.",
+    "rewrite": "In the digital age, technological advancements have transformed every aspect of daily life, including how humans connect with one another. While critics argue that smartphones, social media, and other digital tools have eroded in-person social skills and isolated individuals, I firmly believe that technology, when used responsibly, significantly enhances global social connectivity and strengthens interpersonal bonds."
+  },
+  {
+    "paragraphType": "Body Paragraph (Supporting Point)",
+    "focus": "Task 2: Topic Sentence & Logical Extension",
+    "critique": "The original supporting point is underdeveloped with no examples or explanation. This limits Task Response as it fails to demonstrate why social media improves connectivity.",
+    "rewrite": "One key benefit of technology is its ability to bridge geographical gaps that once separated people. For instance, social media platforms like WhatsApp and Instagram allow users to maintain regular contact with friends and family members living overseas, sharing real-time updates about their lives through photos, videos, and instant messages. Before the advent of such tools, staying connected with distant loved ones required costly long-distance calls or slow, infrequent letters, making sustained relationships challenging. Technology has thus made global social interaction accessible and affordable for people of all backgrounds."
+  },
+  {
+    "paragraphType": "Conclusion",
+    "focus": "Task 2: Position Reinforcement & Paraphrasing",
+    "critique": "The original conclusion is brief and repetitive, failing to summarize key arguments or reinforce the position with fresh language. This weakens Coherence & Cohesion by not providing a satisfying closure.",
+    "rewrite": "In conclusion, while excessive, unregulated use of digital devices can reduce opportunities for face-to-face interaction, the overall impact of technology on social connectivity is overwhelmingly positive. By enabling cross-border communication, facilitating real-time virtual interactions, and creating communities for like-minded individuals, technology has expanded rather than restricted social horizons. Ultimately, technology is a neutral tool; its effect on social behavior depends on how humans choose to use it."
+  }
+],
+  "correctedSentences": [
+ {
+    "original": "Firstly, social media platforms allow us to stay in touch with friends and family across the globe.",
+    "correction": "Firstly, social media platforms such as WhatsApp and Instagram enable us to maintain meaningful contact with friends and family members across the globe, a feat that was logistically and financially prohibitive for most people just two decades ago.",
+    "explanation": "Task Response: Adds specific examples and historical context to extend the idea, making the argument more persuasive. Lexical Resource: Replaces the simplistic phrase 'stay in touch' with 'maintain meaningful contact' to improve precision and formality."
+  },
+  {
+    "original": "Secondly, video calls provide a more personal way to interact than traditional letters.",
+    "correction": "Secondly, real-time video calls via applications like Zoom or Skype offer a far more intimate mode of interaction than traditional handwritten letters, as they allow participants to interpret facial expressions and body language—critical cues for conveying emotional nuance.",
+    "explanation": "Task Response: Elaborates on why video calls are more personal, linking non-verbal cues to emotional communication. Grammatical Range & Accuracy: Uses a non-restrictive clause to add detail, demonstrating control over complex sentence structures."
+  },
+  {
+    "original": "However, excessive use of devices can lead to less face-to-face interaction.",
+    "correction": "That said, excessive and unregulated use of digital devices can indeed diminish opportunities for in-person socialization; for example, teenagers who spend several hours daily scrolling through TikTok may prioritize virtual interactions over engaging with peers at school or family members during meals.",
+    "explanation": "Coherence & Cohesion: Uses a more sophisticated cohesive device ('That said') instead of the basic 'however' to signal a counterargument. Task Response: Adds a specific, relatable example to support the counterpoint, making it more credible."
+  }
+  ],
+  "toolkit": {
+    "essayOutline": {
+      "strategy": "Argumentative Flow (To What Extent Agree/Disagree)",
+      "essayType": "Opinion Essay",
+      "structure": [
+        { "section": "Introduction", "content": "Paraphrase the topic, present the broader context, and state a clear thesis position." },
+        { "section": "Body Paragraph 1", "content": "Support the thesis with a key reason, extended with specific examples and explanations." },
+        { "section": "Body Paragraph 2", "content": "Provide a second supporting reason, again using evidence to elaborate." },
+        { "section": "Body Paragraph 3", "content": "Acknowledge the counterargument, then refute it or explain its limitations to strengthen the thesis." },
+        { "section": "Conclusion", "content": "Summarize key arguments, restate the thesis in varied language, and offer a final thought on the topic." }
+      ],
+      "proTip": "Avoid overgeneralizing claims; always back up statements with real-world examples (e.g., specific apps, demographic groups) to boost Task Response scores."
+    },
+    "vocabulary": [
+      { 
+        "word": "foster interpersonal bonds", 
+        "type": "Collocation",
+        "definition": "To develop and strengthen relationships between people", 
+        "originalSubstitute": "stay in touch",
+        "context": "Technology helps foster interpersonal bonds by enabling real-time communication with distant loved ones." 
+      },
+      { 
+        "word": "digital alienation", 
+        "type": "Topic-Specific",
+        "definition": "The feeling of isolation caused by excessive reliance on digital devices instead of in-person interaction", 
+        "originalSubstitute": "less face-to-face interaction",
+        "context": "Critics argue that prolonged screen time leads to digital alienation, reducing opportunities for meaningful in-person connections." 
+      },
+      { 
+        "word": "geographical barriers", 
+        "type": "Topic-Specific",
+        "definition": "Obstacles to communication caused by physical distance between people", 
+        "originalSubstitute": "across the globe",
+        "context": "Technology has eliminated many geographical barriers, allowing people to connect with others regardless of their location." 
+      },
+      { 
+        "word": "emotional nuance", 
+        "type": "Lexical Upgrade",
+        "definition": "Subtle differences in emotion that are hard to convey without non-verbal cues", 
+        "originalSubstitute": "personal way to interact",
+        "context": "Video calls capture emotional nuance through facial expressions, making them more intimate than text-based communication." 
+      },
+      { 
+        "word": "sustained engagement", 
+        "type": "Collocation",
+        "definition": "Continuous, meaningful interaction over time", 
+        "originalSubstitute": "stay in touch",
+        "context": "Social media platforms facilitate sustained engagement between friends who live in different countries." 
+      },
+      { 
+        "word": "responsible usage", 
+        "type": "Collocation",
+        "definition": "Using technology in a way that balances virtual and in-person interaction", 
+        "originalSubstitute": "used wisely",
+        "context": "The positive impact of technology on socialization depends on responsible usage by individuals." 
+      },
+      { 
+        "word": "erode social skills", 
+        "type": "Collocation",
+        "definition": "To gradually weaken the ability to interact effectively with others in person", 
+        "originalSubstitute": "making people less social",
+        "context": "Critics claim that over-reliance on digital communication can erode social skills like active listening and non-verbal communication." 
+      },
+      { 
+        "word": "virtual communities", 
+        "type": "Topic-Specific",
+        "definition": "Groups of people who connect online based on shared interests or experiences", 
+        "originalSubstitute": "no equivalent",
+        "context": "Technology has created virtual communities for people with niche hobbies, allowing them to connect with others who share their passions." 
+      },
+      { 
+        "word": "logistically prohibitive", 
+        "type": "Lexical Upgrade",
+        "definition": "Impossible or too difficult to organize in practice", 
+        "originalSubstitute": "hard",
+        "context": "Before video calls, regular communication with overseas family was logistically prohibitive for many low-income households." 
+      },
+      { 
+        "word": "enhance connectivity", 
+        "type": "Collocation",
+        "definition": "To improve the ability to connect with others", 
+        "originalSubstitute": "brings people together",
+        "context": "Technology has greatly enhance connectivity by providing multiple channels for instant communication." 
+      }
+    ],
+    "grammar": [
+      { 
+        "structureType": "Third Conditional", 
+        "targetWeakness": "The student rarely uses conditional structures to highlight hypothetical scenarios, limiting grammatical range.",
+        "example": "If social media had not been invented, many people would have lost touch with their friends who moved abroad.", 
+        "explanation": "This structure demonstrates control over complex grammar and helps illustrate the impact of technology by contrasting past realities with hypothetical outcomes, boosting GRA scores." 
+      },
+      { 
+        "structureType": "Non-Restrictive Relative Clauses", 
+        "targetWeakness": "The student uses basic complex sentences but avoids clauses that add extra detail to nouns, reducing sentence variety.",
+        "example": "Zoom, which was originally designed for business meetings, has become a vital tool for family gatherings during global pandemics.", 
+        "explanation": "Non-restrictive clauses add context and depth to sentences, showing the ability to integrate additional information smoothly, which is a key feature of Band 7+ GRA." 
+      },
+      { 
+        "structureType": "Participial Phrases", 
+        "targetWeakness": "The student relies on simple sentence starters, making writing less dynamic.",
+        "example": "Spending hours scrolling through social media, some individuals neglect to engage with the people around them.", 
+        "explanation": "Participial phrases allow for more varied sentence openings and demonstrate control over advanced sentence structures, improving grammatical range." 
+      },
+      { 
+        "structureType": "Inverted Conditionals", 
+        "targetWeakness": "The student avoids risky grammatical structures, missing opportunities to show advanced control.",
+        "example": "Were it not for video calls, maintaining close relationships with distant relatives would be far more challenging.", 
+        "explanation": "Inverted conditionals are a sophisticated structure that replaces basic 'if' clauses, demonstrating a high level of grammatical control and helping to achieve a Band 7+ GRA score." 
+      }
+    ],
+    "cohesion": [
+      { 
+        "technique": "Referencing & Substitution", 
+        "suggestion": "Replace repeated terms like 'technology' with pronouns or synonyms (e.g., 'these digital tools', 'such platforms') to avoid repetition and improve flow.", 
+        "example": "Technology has revolutionized communication. These digital tools allow people to connect with others across the globe in real time." 
+      },
+      { 
+        "technique": "Discourse Markers
+
