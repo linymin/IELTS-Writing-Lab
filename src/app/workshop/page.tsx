@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { experimental_useObject as useObject } from '@ai-sdk/react'; // Use experimental_useObject from @ai-sdk/react
 import { 
   ArrowRight, 
   RefreshCw,
@@ -16,6 +17,19 @@ import {
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { MOCK_QUESTIONS } from '@/lib/mock-questions';
+import { getEvaluationSchema } from '@/lib/schemas/evaluation'; // We might not need this on client if we just trust the stream
+import { z } from 'zod';
+
+// Define a client-side schema for the UI feedback
+const feedbackSchema = z.object({
+  overallScore: z.number().optional(),
+  dimensions: z.object({
+    taskResponse: z.object({ score: z.number().optional() }).optional(),
+    coherenceCohesion: z.object({ score: z.number().optional() }).optional(),
+    lexicalResource: z.object({ score: z.number().optional() }).optional(),
+    grammaticalRangeAccuracy: z.object({ score: z.number().optional() }).optional(),
+  }).optional(),
+}).passthrough();
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -31,14 +45,61 @@ function WorkshopContent() {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [essay, setEssay] = useState('');
   const [taskType, setTaskType] = useState<'task1' | 'task2'>('task2');
-  const [loading, setLoading] = useState(false);
   const [isLoadingQuestion, setIsLoadingQuestion] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loadingStep, setLoadingStep] = useState(0);
-
+  
   // Timer State
   const [timeLeft, setTimeLeft] = useState(2400); // Default to Task 2 (40 mins)
   const [isTimerRunning, setIsTimerRunning] = useState(false);
+
+  // Streaming Object Hook
+  const { object: streamingResult, submit, isLoading, error: streamError } = useObject({
+    api: '/api/evaluate',
+    schema: feedbackSchema,
+    headers: async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (token) {
+        return { 'Authorization': `Bearer ${token}` } as Record<string, string>;
+      }
+      return {} as Record<string, string>;
+    },
+    onFinish: async ({ object, error }: { object?: any, error?: Error }) => {
+       if (error) {
+         setError("Evaluation failed: " + error.message);
+         return;
+       }
+       // Poll for the saved ID in Supabase
+       // The server saves it in the background ('after'). It might take a moment.
+       const checkSaved = async (attempts = 0) => {
+         if (attempts > 10) {
+           setError("Evaluation saved, but could not retrieve ID. Please check your history.");
+           return;
+         }
+         
+         const { data: { user } } = await supabase.auth.getUser();
+         if (!user) return;
+
+         // Look for the most recent evaluation for this essay content (or just recent one)
+         // We can match by exact essay body length or just take the latest.
+         const { data, error } = await supabase
+           .from('essays')
+           .select('evaluations(id)')
+           .eq('user_id', user.id)
+           .order('submitted_at', { ascending: false })
+           .limit(1)
+           .single();
+
+         if (data?.evaluations?.[0]?.id) {
+           router.push(`/evaluation/${data.evaluations[0].id}`);
+         } else {
+           setTimeout(() => checkSaved(attempts + 1), 1000);
+         }
+       };
+       
+       await checkSaved();
+    }
+  });
 
   // Check Configuration
   useEffect(() => {
@@ -80,10 +141,7 @@ function WorkshopContent() {
             
             setTopic(cleanContent);
             setImageUrl(data.image_url || null);
-            // Assuming task_type in DB is 'task1' | 'task2' or similar mapping
-            // Adjust based on actual DB schema. Defaulting to existing logic if needed.
-            // If data.task_type is 1 or 2 (int) like mock
-             setTaskType(data.task_type === 'task1' || data.task_type === 1 ? 'task1' : 'task2');
+            setTaskType(data.task_type === 'task1' || data.task_type === 1 ? 'task1' : 'task2');
           }
         } catch (err) {
           console.error('Error fetching question:', err);
@@ -110,7 +168,6 @@ function WorkshopContent() {
 
   // Timer Logic
   useEffect(() => {
-    // Reset timer when task type changes
     setTimeLeft(taskType === 'task1' ? 1200 : 2400);
     setIsTimerRunning(false);
   }, [taskType]);
@@ -131,22 +188,8 @@ function WorkshopContent() {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     const hours = Math.floor(mins / 60);
-    
-    // Format to match exam style: HH:MM:SS
     return `${hours.toString().padStart(2, '0')}:${(mins % 60).toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
-
-  // Simulated loading steps
-  useEffect(() => {
-    if (loading) {
-      const interval = setInterval(() => {
-        setLoadingStep(prev => (prev < 95 ? prev + Math.random() * 10 : prev));
-      }, 500);
-      return () => clearInterval(interval);
-    } else {
-      setLoadingStep(0);
-    }
-  }, [loading]);
 
   const handleEvaluate = async () => {
     if (!essay.trim() || essay.length < 50) {
@@ -154,62 +197,71 @@ function WorkshopContent() {
       return;
     }
 
-    setLoading(true);
     setError(null);
 
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
-      const res = await fetch('/api/evaluate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({
-          essay_body: essay,
-          task_type: taskType,
-          question_text: topic,
-          question_id: question_id || null
-        })
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) throw new Error(data.error || 'Evaluation failed');
-
-      if (data.id) {
-        router.push(`/evaluation/${data.id}`);
-      } else {
-        throw new Error("No evaluation ID returned");
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong');
-      setLoading(false);
-    }
+    // Call streaming submit
+    submit({
+      essay_body: essay,
+      task_type: taskType,
+      question_text: topic,
+      question_id: question_id || null
+    });
   };
 
-  if (loading) {
+  // Safe access to streaming data
+  // @ts-ignore - The object shape is inferred loosely but we know it matches the schema
+  const currentResult = streamingResult as any;
+
+  if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center animate-pulse max-w-lg w-full">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center max-w-lg w-full">
            <div className="w-20 h-20 bg-blue-100 rounded-full mx-auto mb-6 flex items-center justify-center">
              <RefreshCw className="w-10 h-10 text-blue-600 animate-spin" />
            </div>
            <h2 className="text-2xl font-bold text-slate-900 mb-2">Analyzing your essay...</h2>
-           <p className="text-slate-500 mb-8">Our AI examiner is checking your vocabulary, grammar, and coherence.</p>
            
-           <div className="max-w-md mx-auto">
-             <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-               <div className="h-full bg-blue-600 transition-all duration-300" style={{ width: `${loadingStep}%` }}></div>
+           {/* Real-time Streaming Feedback */}
+           {currentResult ? (
+             <div className="text-left mt-6 space-y-3 bg-slate-50 p-4 rounded-lg border border-slate-100">
+               <div className="flex justify-between items-center">
+                 <span className="text-slate-600">Overall Score:</span>
+                 <span className="font-bold text-blue-600">{currentResult.overallScore ? currentResult.overallScore : 'Calculating...'}</span>
+               </div>
+               
+               {/* Show dimensions as they appear */}
+               <div className="space-y-1 text-sm text-slate-500">
+                 <div className="flex justify-between">
+                   <span>Task Response:</span>
+                   <span className={currentResult.dimensions?.taskResponse?.score ? "text-green-600" : "text-slate-300"}>
+                     {currentResult.dimensions?.taskResponse?.score || 'Pending...'}
+                   </span>
+                 </div>
+                 <div className="flex justify-between">
+                   <span>Coherence & Cohesion:</span>
+                   <span className={currentResult.dimensions?.coherenceCohesion?.score ? "text-green-600" : "text-slate-300"}>
+                     {currentResult.dimensions?.coherenceCohesion?.score || 'Pending...'}
+                   </span>
+                 </div>
+                 <div className="flex justify-between">
+                   <span>Lexical Resource:</span>
+                   <span className={currentResult.dimensions?.lexicalResource?.score ? "text-green-600" : "text-slate-300"}>
+                     {currentResult.dimensions?.lexicalResource?.score || 'Pending...'}
+                   </span>
+                 </div>
+                 <div className="flex justify-between">
+                   <span>Grammar:</span>
+                   <span className={currentResult.dimensions?.grammaticalRangeAccuracy?.score ? "text-green-600" : "text-slate-300"}>
+                     {currentResult.dimensions?.grammaticalRangeAccuracy?.score || 'Pending...'}
+                   </span>
+                 </div>
+               </div>
              </div>
-             <div className="flex justify-between mt-2 text-xs text-slate-400 font-medium">
-               <span>Analyzing Structure</span>
-               <span>Checking Grammar</span>
-               <span>Scoring</span>
-             </div>
-           </div>
+           ) : (
+             <p className="text-slate-500 mb-8">Connecting to AI examiner...</p>
+           )}
+
+           <p className="text-xs text-slate-400 mt-6">This may take up to 30 seconds.</p>
         </div>
       </div>
     );
