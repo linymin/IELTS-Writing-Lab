@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { after } from 'next/server'; // Next.js 15+ feature for background tasks
 import { ScoreRequest } from '@/types/ielts';
 import { createOpenAI } from '@ai-sdk/openai';
 import { streamObject } from 'ai';
@@ -10,7 +9,7 @@ import { getEvaluationSchema } from '@/lib/schemas/evaluation';
 /**
  * POST /api/evaluate
  * Receives an essay and streams a 16-dimension score using Vercel AI SDK & Doubao.
- * Now supports streaming to prevent Vercel timeouts.
+ * Uses standard await in onFinish to ensure data persistence (avoids 'after' compatibility issues).
  */
 
 // Initialize OpenAI provider with Doubao configuration
@@ -24,7 +23,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Helper to save results to Supabase (runs in background)
+// Helper to save results to Supabase
 async function saveEvaluationToDB(
   data: any, 
   userId: string, 
@@ -32,6 +31,7 @@ async function saveEvaluationToDB(
   authHeader: string | null
 ) {
   try {
+    console.log(`[DB] Saving evaluation for user ${userId}...`);
     // Re-create authenticated client for RLS
     const supabaseClient = authHeader 
       ? createClient(supabaseUrl, supabaseKey, {
@@ -78,7 +78,8 @@ async function saveEvaluationToDB(
             paragraphRewrites: data.paragraphRewrites,
             toolkit: data.toolkit,
             referenceEssay: data.referenceEssay,
-            corrections: data.correctedSentences
+            corrections: data.correctedSentences,
+            estimatedWordBand: data.estimatedWordBand
           }
         })
         .select()
@@ -105,11 +106,11 @@ async function saveEvaluationToDB(
             trend_comment: attemptNo > 1 ? "Keep practicing!" : "First attempt"
           });
           
-        console.log(`[Background] Saved evaluation ${evalData.id} for user ${userId}`);
+        console.log(`[DB] Successfully saved evaluation ${evalData.id}`);
       }
     }
   } catch (error) {
-    console.error("[Background] Database persistence failed:", error);
+    console.error("[DB] Persistence failed:", error);
   }
 }
 
@@ -168,7 +169,7 @@ Essay:
 ${body.essay_body}
 `;
 
-    const modelId = process.env.DOUBAO_MODEL || 'ep-20250207172827-2k29f'; // Fallback or env
+    const modelId = process.env.DOUBAO_MODEL || 'ep-20250207172827-2k29f'; 
 
     // 4. Stream Object
     const result = streamObject({
@@ -179,10 +180,10 @@ ${body.essay_body}
       temperature: 0.3,
       onFinish: async ({ object }) => {
         if (object && userId) {
-          // Use 'after' to ensure DB operations complete even if response closes
-          after(async () => {
-             await saveEvaluationToDB(object, userId!, body, authHeader);
-          });
+           // Await directly to ensure it finishes before the lambda might freeze/terminate
+           // In streaming response, Vercel usually keeps the lambda alive until the stream closes.
+           // Since we are inside onFinish, the stream is done, but we can extend execution by awaiting.
+           await saveEvaluationToDB(object, userId!, body, authHeader);
         }
       }
     });
