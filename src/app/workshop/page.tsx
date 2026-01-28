@@ -47,6 +47,7 @@ function WorkshopContent() {
   const [taskType, setTaskType] = useState<'task1' | 'task2'>('task2');
   const [isLoadingQuestion, setIsLoadingQuestion] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   
   // Timer State
   const [timeLeft, setTimeLeft] = useState(2400); // Default to Task 2 (40 mins)
@@ -70,48 +71,37 @@ function WorkshopContent() {
          return;
        }
        
-       if (!object) {
-          setError("No evaluation data received.");
-          return;
-       }
+       setIsRedirecting(true);
 
-       // 2. Call Save API
-       try {
-         const { data: { session } } = await supabase.auth.getSession();
-         const token = session?.access_token;
-         
-         const saveRes = await fetch('/api/evaluate/save', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-            },
-            body: JSON.stringify({
-              data: object,
-              originalBody: {
-                essay_body: essay,
-                task_type: taskType,
-                question_text: topic,
-                question_id: question_id || null
-              }
-            })
-         });
-         
-         if (!saveRes.ok) {
-            console.error("Save failed:", await saveRes.text());
-            setError("Evaluation generated but failed to save.");
-            return;
+       // Poll for the saved ID in Supabase
+       // The server saves it in the background ('after'). It might take a moment.
+       const checkSaved = async (attempts = 0) => {
+         if (attempts > 10) {
+           setError("Evaluation saved, but could not retrieve ID. Please check your history.");
+           return;
          }
          
-         const saveData = await saveRes.json();
-         if (saveData.id) {
-           router.push(`/evaluation/${saveData.id}`);
+         const { data: { user } } = await supabase.auth.getUser();
+         if (!user) return;
+
+         // Look for the most recent evaluation for this essay content (or just recent one)
+         // We can match by exact essay body length or just take the latest.
+         const { data, error } = await supabase
+           .from('essays')
+           .select('evaluations(id)')
+           .eq('user_id', user.id)
+           .order('submitted_at', { ascending: false })
+           .limit(1)
+           .single();
+
+         if (data?.evaluations?.[0]?.id) {
+           router.push(`/evaluation/${data.evaluations[0].id}`);
+         } else {
+           setTimeout(() => checkSaved(attempts + 1), 1000);
          }
-         
-       } catch (err) {
-          console.error("Save Error:", err);
-          setError("Failed to save evaluation results.");
-       }
+       };
+       
+       await checkSaved();
     }
   });
 
@@ -226,7 +216,7 @@ function WorkshopContent() {
   // @ts-ignore - The object shape is inferred loosely but we know it matches the schema
   const currentResult = streamingResult as any;
 
-  if (isLoading) {
+  if (isLoading || isRedirecting) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center max-w-lg w-full">

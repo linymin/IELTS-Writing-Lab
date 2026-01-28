@@ -9,8 +9,6 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-export const dynamic = 'force-dynamic';
-
 export default async function EvaluationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
@@ -25,14 +23,9 @@ export default async function EvaluationPage({ params }: { params: Promise<{ id:
   // Given this is a simple app, let's use the Service Role Key for server-side fetching to ensure we can render the page.
   // WARNING: This bypasses RLS. Ensure IDs are UUIDs and hard to guess.
 
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!serviceKey) {
-     console.error("Missing SUPABASE_SERVICE_ROLE_KEY. Evaluation page may fail in production.");
-  }
-
   const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    serviceKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! // Fallback to Anon but likely fail if RLS is strict
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! // Fallback to Anon but likely fail if RLS is strict
   );
 
   const { data: evalData, error: evalError } = await supabaseAdmin
