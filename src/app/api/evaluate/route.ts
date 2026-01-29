@@ -42,13 +42,21 @@ async function saveEvaluationToDB(
       : supabase;
 
     // A. Save Essay
+    // Validate question_id
+    let validQuestionId = originalBody.question_id;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (validQuestionId && !uuidRegex.test(validQuestionId)) {
+       console.warn(`[Background] Invalid question_id received: ${validQuestionId}. Treating as null.`);
+       validQuestionId = null;
+    }
+
     const { data: essayData, error: essayError } = await supabaseClient
       .from('essays')
       .insert({
         user_id: userId,
         task_type: originalBody.task_type,
         question_text: data.topic,
-        question_id: originalBody.question_id || null,
+        question_id: validQuestionId || undefined,
         essay_body: originalBody.essay_body,
         word_count: originalBody.essay_body.split(/\s+/).length
       })
