@@ -16,10 +16,10 @@ export const maxDuration = 300; // Allow up to 5 minutes for AI processing
  */
 
 // Initialize OpenAI provider with Doubao configuration
-const doubao = createOpenAI({
-  apiKey: process.env.DOUBAO_API_KEY || process.env.OPENAI_API_KEY,
-  baseURL: process.env.DOUBAO_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3",
-});
+// const doubao = createOpenAI({
+//   apiKey: process.env.DOUBAO_API_KEY || process.env.OPENAI_API_KEY,
+//   baseURL: process.env.DOUBAO_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3",
+// });
 
 // Initialize Supabase Client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -185,6 +185,11 @@ ${body.essay_body}
 
     // Initialize OpenAI provider inside the handler or try-catch block to prevent crash on init
     try {
+      const doubao = createOpenAI({
+        apiKey: apiKey,
+        baseURL: process.env.DOUBAO_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3",
+      });
+
       // 4. Stream Object
       const result = streamObject({
         model: doubao(modelId),

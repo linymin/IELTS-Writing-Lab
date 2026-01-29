@@ -2,12 +2,25 @@
 
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { experimental_useObject as useObject } from '@ai-sdk/react';
+import { z } from 'zod';
 import { IELTSReport } from '@/types/evaluation';
 import EvaluationReportSimplified from '@/components/EvaluationReportSimplified';
-import { Save, Send, Loader2, ArrowLeft, Maximize2, Minimize2, Lightbulb } from 'lucide-react';
+import { Save, Send, Loader2, ArrowLeft, Maximize2, Minimize2, Lightbulb, RefreshCw, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/client';
+
+// Define schema for streaming feedback
+const feedbackSchema = z.object({
+  overallScore: z.number().optional(),
+  dimensions: z.object({
+    taskResponse: z.object({ score: z.number().optional() }).optional(),
+    coherenceCohesion: z.object({ score: z.number().optional() }).optional(),
+    lexicalResource: z.object({ score: z.number().optional() }).optional(),
+    grammaticalRangeAccuracy: z.object({ score: z.number().optional() }).optional(),
+  }).optional(),
+}).passthrough();
 
 interface RewriteClientProps {
   originalEssayBody: string;
@@ -25,11 +38,67 @@ export default function RewriteClient({
   evaluationId
 }: RewriteClientProps) {
   const router = useRouter();
+  const supabase = createClient();
   const [essayContent, setEssayContent] = useState(originalEssayBody);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   const wordCount = essayContent.trim().split(/\s+/).filter(w => w.length > 0).length;
+
+  // Streaming Object Hook
+  const { object: streamingResult, submit, isLoading, error: streamError } = useObject({
+    api: '/api/evaluate',
+    schema: feedbackSchema,
+    headers: async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (token) {
+        return { 'Authorization': `Bearer ${token}` } as Record<string, string>;
+      }
+      return {} as Record<string, string>;
+    },
+    onFinish: async ({ object, error }) => {
+       if (error) {
+         setError("Evaluation failed: " + error.message);
+         return;
+       }
+       
+       setIsRedirecting(true);
+
+       // Poll for the saved ID in Supabase
+       const checkSaved = async (attempts = 0) => {
+         // Increase attempts to 60 (approx 60 seconds) to allow for slow background saves
+         if (attempts > 60) {
+           setError("Evaluation saved, but could not retrieve ID. Please check your history.");
+           return;
+         }
+         
+         const { data: { user } } = await supabase.auth.getUser();
+         if (!user) return;
+
+         const { data, error } = await supabase
+           .from('essays')
+           .select('evaluations(id)')
+           .eq('user_id', user.id)
+           .order('submitted_at', { ascending: false })
+           .limit(1)
+           .single();
+
+         if (data?.evaluations?.[0]?.id) {
+           router.push(`/evaluation/${data.evaluations[0].id}`);
+         } else {
+           setTimeout(() => checkSaved(attempts + 1), 1000);
+         }
+       };
+       
+       await checkSaved();
+    }
+  });
+
+  // Safe access to streaming data
+  // @ts-ignore
+  const currentResult = streamingResult as any;
 
   const lowestDimension = useMemo(() => {
     const dims = originalReport.dimensions;
@@ -39,16 +108,12 @@ export default function RewriteClient({
       { key: 'Lexical Resource', val: dims.lexicalResource.score },
       { key: 'Grammatical Range & Accuracy', val: dims.grammaticalRangeAccuracy.score }
     ];
-    // Find min score
     const minVal = Math.min(...scores.map(s => s.val));
-    // Get all dimensions with that min score
     const lowest = scores.filter(s => s.val === minVal);
-    // Return the first one or join them if multiple? Let's just return the first one for simplicity.
     return lowest[0]?.key || 'General Improvement';
   }, [originalReport]);
 
   const handleSaveDraft = () => {
-    // TODO: Implement save draft functionality (local storage or API)
     alert("Draft saved locally! (Feature coming soon)");
     localStorage.setItem(`draft_${evaluationId}`, essayContent);
   };
@@ -60,7 +125,8 @@ export default function RewriteClient({
       return;
     }
 
-    setIsSubmitting(true);
+    setError(null);
+    
     try {
       // 1. Check Auth first
       const { data: { session } } = await supabase.auth.getSession();
@@ -68,26 +134,76 @@ export default function RewriteClient({
         throw new Error("You must be logged in to submit a rewrite.");
       }
 
-      // 2. Prepare Payload
-      const payload = {
+      // 2. Submit using streaming hook
+      submit({
         essay_body: essayContent,
         task_type: taskType,
         question_text: questionText,
-      };
-
-      // 3. Store in Session Storage with a unique key
-      const key = `eval_pending_${Date.now()}`;
-      sessionStorage.setItem(key, JSON.stringify(payload));
-
-      // 4. Redirect to Processing Page
-      router.push(`/evaluation/processing?key=${key}`);
+      });
 
     } catch (error) {
       console.error("Submission error:", error);
-      alert(error instanceof Error ? error.message : "Failed to submit for evaluation. Please try again.");
-      setIsSubmitting(false);
+      setError(error instanceof Error ? error.message : "Failed to submit for evaluation.");
     }
   };
+
+  if (isLoading || isRedirecting) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-50">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center max-w-lg w-full">
+           <div className="w-20 h-20 bg-blue-100 rounded-full mx-auto mb-6 flex items-center justify-center">
+             <RefreshCw className="w-10 h-10 text-blue-600 animate-spin" />
+           </div>
+           <h2 className="text-2xl font-bold text-slate-900 mb-2">Analyzing your Rewrite...</h2>
+           
+           {currentResult ? (
+             <div className="text-left mt-6 space-y-3 bg-slate-50 p-4 rounded-lg border border-slate-100">
+               <div className="space-y-1 text-sm text-slate-500">
+                 <div className="flex justify-between">
+                   <span>Task Response:</span>
+                   <span className={currentResult.dimensions?.taskResponse?.score ? "text-green-600 font-bold" : "text-slate-300"}>
+                     {currentResult.dimensions?.taskResponse?.score || 'Pending...'}
+                   </span>
+                 </div>
+                 <div className="flex justify-between">
+                   <span>Coherence & Cohesion:</span>
+                   <span className={currentResult.dimensions?.coherenceCohesion?.score ? "text-green-600 font-bold" : "text-slate-300"}>
+                     {currentResult.dimensions?.coherenceCohesion?.score || 'Pending...'}
+                   </span>
+                 </div>
+                 <div className="flex justify-between">
+                   <span>Lexical Resource:</span>
+                   <span className={currentResult.dimensions?.lexicalResource?.score ? "text-green-600 font-bold" : "text-slate-300"}>
+                     {currentResult.dimensions?.lexicalResource?.score || 'Pending...'}
+                   </span>
+                 </div>
+                 <div className="flex justify-between">
+                   <span>Grammar:</span>
+                   <span className={currentResult.dimensions?.grammaticalRangeAccuracy?.score ? "text-green-600 font-bold" : "text-slate-300"}>
+                     {currentResult.dimensions?.grammaticalRangeAccuracy?.score || 'Pending...'}
+                   </span>
+                 </div>
+               </div>
+
+               <div className="flex justify-between items-center pt-2 border-t border-slate-200 mt-2">
+                 <span className="text-slate-900 font-medium">Overall Score:</span>
+                 <span className={cn(
+                    "font-bold text-lg", 
+                    currentResult.overallScore ? "text-blue-600" : "text-slate-400 text-sm font-normal"
+                 )}>
+                   {currentResult.overallScore ? currentResult.overallScore : 'Calculating...'}
+                 </span>
+               </div>
+             </div>
+           ) : (
+             <p className="text-slate-500 mb-8">Connecting to AI examiner...</p>
+           )}
+
+           <p className="text-xs text-slate-400 mt-6">This may take up to 30 seconds.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
@@ -191,21 +307,41 @@ export default function RewriteClient({
                <button 
                  onClick={handleSaveDraft}
                  className="flex items-center gap-2 px-4 py-2 text-slate-600 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors text-sm font-medium shadow-sm"
-                 disabled={isSubmitting}
+                 disabled={isLoading}
                >
                  <Save className="w-4 h-4" /> Save Draft
                </button>
                <button 
                  onClick={handleSubmit}
-                 disabled={isSubmitting}
-                 className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md text-sm font-medium disabled:opacity-70 disabled:cursor-not-allowed"
+                 disabled={isLoading}
+                 className="flex items-center gap-2 px-6 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors text-sm font-bold shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                >
-                 {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                 Submit
+                 {isLoading ? (
+                   <>
+                     <Loader2 className="w-4 h-4 animate-spin" /> Submitting...
+                   </>
+                 ) : (
+                   <>
+                     <Send className="w-4 h-4" /> Submit Rewrite
+                   </>
+                 )}
                </button>
             </div>
           </div>
         </div>
+
+        {/* Error Toast (Simple) */}
+        {error && (
+          <div className="absolute bottom-20 right-6 max-w-sm bg-red-50 text-red-600 border border-red-100 p-4 rounded-lg shadow-lg flex items-start gap-3 animate-in slide-in-from-right">
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+            <div className="flex-1">
+               <h4 className="font-bold text-sm">Submission Error</h4>
+               <p className="text-xs mt-1">{error}</p>
+            </div>
+            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600">×</button>
+          </div>
+        )}
+
       </div>
     </div>
   );
