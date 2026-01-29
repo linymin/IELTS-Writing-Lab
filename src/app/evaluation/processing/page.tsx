@@ -50,7 +50,8 @@ function ProcessingContent() {
        // Poll for the saved ID in Supabase
        let attempts = 0;
        const checkSaved = async () => {
-         if (attempts > 20) { // Increased timeout to 20s
+         // Increased timeout and max attempts for slower backend processing
+         if (attempts > 30) { 
            setError("Evaluation saved, but could not retrieve ID. Please check your history.");
            return;
          }
@@ -59,6 +60,10 @@ function ProcessingContent() {
          const { data: { user } } = await supabase.auth.getUser();
          if (!user) return;
 
+         // We need to match the specific rewrite essay we just submitted.
+         // Since we don't have the new essay ID returned by the stream yet (it's async),
+         // we rely on finding the LATEST submission by this user.
+         // This is generally safe for a single user session.
          const { data } = await supabase
            .from('essays')
            .select('evaluations(id)')
@@ -72,7 +77,7 @@ function ProcessingContent() {
            if (storageKey) sessionStorage.removeItem(storageKey);
            router.replace(`/evaluation/${data.evaluations[0].id}`);
          } else {
-           setTimeout(checkSaved, 1000);
+           setTimeout(checkSaved, 2000); // Poll every 2 seconds
          }
        };
        

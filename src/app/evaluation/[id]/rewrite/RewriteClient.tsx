@@ -79,7 +79,7 @@ export default function RewriteClient({
       const key = `eval_pending_${Date.now()}`;
       sessionStorage.setItem(key, JSON.stringify(payload));
 
-      // 4. Redirect to Processing Page
+      // 4. Redirect to Processing Page (Corrected Path)
       router.push(`/evaluation/processing?key=${key}`);
 
     } catch (error) {

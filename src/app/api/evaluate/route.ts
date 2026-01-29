@@ -193,7 +193,7 @@ ${body.essay_body}
 
     // 4. Stream Object
     try {
-      const result = streamObject({
+      const result = await streamObject({
         model: doubao(modelId),
         schema: getEvaluationSchema(body.task_type),
         system: finalSystemPrompt,
