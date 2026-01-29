@@ -2,7 +2,7 @@
 
 import { TrendingUp, ArrowRight, Target, RefreshCw, BarChart3 } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -12,10 +12,7 @@ function cn(...inputs: ClassValue[]) {
 }
 
 // Initialize Supabase Client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// const supabase = createClient();
 
 interface EssayRecord {
   id: string; // evaluation id
@@ -41,6 +38,7 @@ interface AverageScores {
 }
 
 export default function ImprovementPage() {
+  const supabase = createClient();
   const [targetScore, setTargetScore] = useState<number>(7.0);
   const [essaysToImprove, setEssaysToImprove] = useState<EssayRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,7 +98,7 @@ export default function ImprovementPage() {
             essay_id: essayData.id,
             topic: essayData.question_text,
             overall_score: Number(item.overall_band),
-            dimensions: item.band_scores as unknown as EssayRecord['dimensions'],
+            dimensions: item.band_scores as unknown as EssayRecord['dimensions'] || {},
             created_at: essayData.submitted_at || item.created_at,
             task_type: essayData.task_type
           };
@@ -296,7 +294,7 @@ export default function ImprovementPage() {
               Great job! All your recent essays meet or exceed your target score of {targetScore}.
             </p>
             <Link 
-              href="/dashboard"
+              href="/workshop"
               className="inline-flex items-center gap-2 text-blue-600 font-medium hover:underline"
             >
               Write a new essay <ArrowRight className="w-4 h-4" />

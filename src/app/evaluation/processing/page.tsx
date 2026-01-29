@@ -3,12 +3,13 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { RefreshCw, AlertTriangle, Loader2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/client';
 
 function ProcessingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const storageKey = searchParams.get('key');
+  const supabase = createClient();
   
   const [loadingStep, setLoadingStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +67,14 @@ function ProcessingContent() {
            throw new Error("Authentication required.");
         }
 
+        // Use streaming API but wait for full response
+        // Note: The rewrite flow currently expects a single JSON response, not a stream
+        // We need to adapt this to handle the streaming response or use a non-streaming endpoint
+        // For now, we'll accumulate the stream or assume the API can handle non-streaming mode
+        // Actually, /api/evaluate IS a streaming endpoint now.
+        // We need to use experimental_useObject or similar, OR consume the stream manually.
+        // Since this page is "Processing...", consuming manually is fine.
+        
         const res = await fetch('/api/evaluate', {
           method: 'POST',
           headers: {
@@ -75,17 +84,61 @@ function ProcessingContent() {
           body: JSON.stringify(payload)
         });
 
-        const data = await res.json();
-
         if (!res.ok) {
            if (res.status === 401) throw new Error("Session expired. Please log in.");
-           throw new Error(data.error || 'Evaluation failed');
+           const errorData = await res.json();
+           throw new Error(errorData.error || 'Evaluation failed');
         }
 
-        if (data.id) {
+        // Consume the stream to get the final object
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder();
+        let resultText = '';
+        
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            resultText += decoder.decode(value, { stream: true });
+          }
+        }
+        
+        // The stream returns a series of JSON objects (protocol). 
+        // We need the final accumulated state or the ID that is saved.
+        // BUT, /api/evaluate saves to DB in the background (after).
+        // It does NOT return the ID in the stream response itself usually.
+        // The stream response is the AI content.
+        
+        // Wait for the background save to complete.
+        // We need to poll Supabase for the new evaluation ID, similar to Workshop page.
+        
+        let attempts = 0;
+        const checkSaved = async (): Promise<string> => {
+           if (attempts > 10) throw new Error("Evaluation saved, but could not retrieve ID.");
+           attempts++;
+           
+           const { data, error } = await supabase
+             .from('essays')
+             .select('evaluations(id)')
+             .eq('user_id', session!.user.id)
+             .order('submitted_at', { ascending: false })
+             .limit(1)
+             .single();
+             
+           if (data?.evaluations?.[0]?.id) {
+             return data.evaluations[0].id;
+           }
+           
+           await new Promise(r => setTimeout(r, 1000));
+           return checkSaved();
+        };
+        
+        const newEvalId = await checkSaved();
+
+        if (newEvalId) {
           // Success! Clear storage and redirect
           sessionStorage.removeItem(storageKey);
-          router.replace(`/evaluation/${data.id}`);
+          router.replace(`/evaluation/${newEvalId}`);
         } else {
           throw new Error("No evaluation ID returned");
         }

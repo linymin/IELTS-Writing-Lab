@@ -7,6 +7,8 @@ import { createClient } from '@supabase/supabase-js';
 import { getSystemPrompt, IELTS_TASK1_RUBRIC_MD, IELTS_TASK2_RUBRIC_MD } from '@/lib/prompts/ielts-rubric';
 import { getEvaluationSchema } from '@/lib/schemas/evaluation';
 
+export const maxDuration = 300; // Allow up to 5 minutes for AI processing
+
 /**
  * POST /api/evaluate
  * Receives an essay and streams a 16-dimension score using Vercel AI SDK & Doubao.
@@ -168,26 +170,45 @@ Essay:
 ${body.essay_body}
 `;
 
-    const modelId = process.env.DOUBAO_MODEL || 'ep-20250207172827-2k29f'; // Fallback or env
+    // Debugging: Check Environment Variables (Masked)
+    const apiKey = process.env.DOUBAO_API_KEY || process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      console.error("Critical Error: DOUBAO_API_KEY or OPENAI_API_KEY is missing in environment variables.");
+      return NextResponse.json(
+        { error: 'Server configuration error: Missing API Key' },
+        { status: 500 }
+      );
+    }
+
+    const modelId = process.env.DOUBAO_MODEL || 'ep-20250207172827-2k29f'; 
+    console.log(`[Evaluate] Using Model ID: ${modelId}`);
 
     // 4. Stream Object
-    const result = streamObject({
-      model: doubao(modelId),
-      schema: getEvaluationSchema(body.task_type),
-      system: finalSystemPrompt,
-      prompt: userPrompt,
-      temperature: 0.3,
-      onFinish: async ({ object }) => {
-        if (object && userId) {
-          // Use 'after' to ensure DB operations complete even if response closes
-          after(async () => {
-             await saveEvaluationToDB(object, userId!, body, authHeader);
-          });
+    try {
+      const result = streamObject({
+        model: doubao(modelId),
+        schema: getEvaluationSchema(body.task_type),
+        system: finalSystemPrompt,
+        prompt: userPrompt,
+        temperature: 0.3,
+        onFinish: async ({ object }) => {
+          if (object && userId) {
+            // Use 'after' to ensure DB operations complete even if response closes
+            after(async () => {
+               await saveEvaluationToDB(object, userId!, body, authHeader);
+            });
+          }
         }
-      }
-    });
+      });
 
-    return result.toTextStreamResponse();
+      return result.toTextStreamResponse();
+    } catch (streamError: any) {
+      console.error("Stream Object Initialization Error:", streamError);
+      return NextResponse.json(
+        { error: `AI Service Connection Failed: ${streamError.message}` },
+        { status: 500 }
+      );
+    }
 
   } catch (error) {
     console.error('Evaluation error:', error);

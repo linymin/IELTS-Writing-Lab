@@ -92,13 +92,13 @@ export const getEvaluationSchema = (taskType: 'task1' | 'task2') => {
 
   return z.object({
     topic: z.string().describe('The topic or question text identified'),
-    overallScore: z.number().describe('Overall Band Score (0-9)'),
     dimensions: z.object({
       taskResponse: createDimensionSchema(TRSubItems),
       coherenceCohesion: createDimensionSchema(CCSubItems),
       lexicalResource: createDimensionSchema(LRSubItems),
       grammaticalRangeAccuracy: createDimensionSchema(GRASubItems)
     }),
+    overallScore: z.number().describe('Overall Band Score (0-9)'),
     paragraphRewrites: z.array(ParagraphRewriteSchema),
     correctedSentences: z.array(CorrectedSentenceSchema),
     toolkit: ToolkitSchema,

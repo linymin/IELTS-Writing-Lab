@@ -1,9 +1,11 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { login, signup } from './actions'
 
 export default function LoginForm() {
+  const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -15,6 +17,9 @@ export default function LoginForm() {
       const result = await action(formData)
       if (result?.error) {
         setError(result.error)
+      } else if (result?.success) {
+        router.push('/workshop')
+        router.refresh()
       } else if (result?.message) {
         setMessage(result.message)
       }

@@ -159,13 +159,16 @@ export default function RewriteClient({
         </div>
         
         {/* Priority Tip Banner */}
-        <div className="bg-blue-50 border-b border-blue-100 px-6 py-3 flex items-center gap-3 animate-in slide-in-from-top-2 duration-500">
-           <div className="bg-blue-100 p-1.5 rounded-full">
-             <Lightbulb className="w-4 h-4 text-blue-600" />
+        <div className="bg-amber-50 border-b border-amber-100 px-6 py-4 flex items-center gap-4 animate-in slide-in-from-top-2 duration-500 shadow-sm">
+           <div className="bg-amber-100 p-2 rounded-full shrink-0">
+             <Lightbulb className="w-5 h-5 text-amber-600" />
            </div>
-           <p className="text-sm text-blue-900">
-             <span className="font-bold">Priority Tip:</span> Based on previous feedback, focus on <span className="font-bold underline decoration-blue-300 decoration-2 underline-offset-2">{lowestDimension}</span> for this rewrite.
-           </p>
+           <div>
+             <p className="text-sm text-amber-900 font-medium leading-snug">
+               <span className="font-bold uppercase tracking-wide text-xs text-amber-700 block mb-0.5">Priority Focus</span>
+               Based on your previous score, pay special attention to <span className="font-bold underline decoration-amber-400 decoration-2 underline-offset-2">{lowestDimension}</span> in this version.
+             </p>
+           </div>
         </div>
 
         {/* Editor Area - Maximized */}

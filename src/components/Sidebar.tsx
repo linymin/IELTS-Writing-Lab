@@ -70,6 +70,7 @@ interface SidebarProps {
 
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { signout } from '@/app/login/actions';
+import { UserAvatar } from './UserAvatar';
 
 export const Sidebar = ({ isCollapsed, toggleSidebar }: SidebarProps) => {
   const { t } = useLanguage();
@@ -156,9 +157,23 @@ export const Sidebar = ({ isCollapsed, toggleSidebar }: SidebarProps) => {
         </button>
       </nav>
 
+      {/* User Profile */}
+      <div className={cn(
+        "p-4 border-t border-slate-800 flex items-center gap-3 mt-auto",
+        isCollapsed ? "justify-center" : ""
+      )}>
+        <UserAvatar />
+        {!isCollapsed && (
+          <div className="flex flex-col overflow-hidden">
+             <span className="text-sm font-medium text-white truncate">My Profile</span>
+             <span className="text-xs text-slate-500 truncate">Manage Account</span>
+          </div>
+        )}
+      </div>
+
       {/* Footer / Version */}
       <div className={cn(
-        "p-6 text-slate-500 text-sm transition-all",
+        "px-6 pb-6 pt-2 text-slate-600 text-xs transition-all",
         isCollapsed && "hidden"
       )}>
         v1.0.0 (Beta)

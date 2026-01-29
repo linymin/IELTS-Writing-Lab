@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/client';
 import { experimental_useObject as useObject } from '@ai-sdk/react'; // Use experimental_useObject from @ai-sdk/react
 import { 
   ArrowRight, 
@@ -38,6 +38,7 @@ function cn(...inputs: ClassValue[]) {
 function WorkshopContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const supabase = createClient();
   const qid = searchParams.get('qid'); // Legacy mock support
   const question_id = searchParams.get('question_id'); // Supabase support
 
@@ -112,7 +113,9 @@ function WorkshopContent() {
     }
   }, []);
 
-  // Auto-login logic
+  // Auto-login logic removed as it conflicts with middleware and RLS
+  // Authentication should be handled by the middleware and login page
+  /*
   useEffect(() => {
     const initAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -123,6 +126,7 @@ function WorkshopContent() {
     };
     initAuth();
   }, []);
+  */
 
   // Load Question from ID (Mock or Supabase)
   useEffect(() => {
@@ -228,37 +232,43 @@ function WorkshopContent() {
            {/* Real-time Streaming Feedback */}
            {currentResult ? (
              <div className="text-left mt-6 space-y-3 bg-slate-50 p-4 rounded-lg border border-slate-100">
-               <div className="flex justify-between items-center">
-                 <span className="text-slate-600">Overall Score:</span>
-                 <span className="font-bold text-blue-600">{currentResult.overallScore ? currentResult.overallScore : 'Calculating...'}</span>
-               </div>
-               
                {/* Show dimensions as they appear */}
                <div className="space-y-1 text-sm text-slate-500">
                  <div className="flex justify-between">
                    <span>Task Response:</span>
-                   <span className={currentResult.dimensions?.taskResponse?.score ? "text-green-600" : "text-slate-300"}>
+                   <span className={currentResult.dimensions?.taskResponse?.score ? "text-green-600 font-bold" : "text-slate-300"}>
                      {currentResult.dimensions?.taskResponse?.score || 'Pending...'}
                    </span>
                  </div>
                  <div className="flex justify-between">
                    <span>Coherence & Cohesion:</span>
-                   <span className={currentResult.dimensions?.coherenceCohesion?.score ? "text-green-600" : "text-slate-300"}>
+                   <span className={currentResult.dimensions?.coherenceCohesion?.score ? "text-green-600 font-bold" : "text-slate-300"}>
                      {currentResult.dimensions?.coherenceCohesion?.score || 'Pending...'}
                    </span>
                  </div>
                  <div className="flex justify-between">
                    <span>Lexical Resource:</span>
-                   <span className={currentResult.dimensions?.lexicalResource?.score ? "text-green-600" : "text-slate-300"}>
+                   <span className={currentResult.dimensions?.lexicalResource?.score ? "text-green-600 font-bold" : "text-slate-300"}>
                      {currentResult.dimensions?.lexicalResource?.score || 'Pending...'}
                    </span>
                  </div>
                  <div className="flex justify-between">
                    <span>Grammar:</span>
-                   <span className={currentResult.dimensions?.grammaticalRangeAccuracy?.score ? "text-green-600" : "text-slate-300"}>
+                   <span className={currentResult.dimensions?.grammaticalRangeAccuracy?.score ? "text-green-600 font-bold" : "text-slate-300"}>
                      {currentResult.dimensions?.grammaticalRangeAccuracy?.score || 'Pending...'}
                    </span>
                  </div>
+               </div>
+
+               {/* Overall Score at the bottom */}
+               <div className="flex justify-between items-center pt-2 border-t border-slate-200 mt-2">
+                 <span className="text-slate-900 font-medium">Overall Score:</span>
+                 <span className={cn(
+                    "font-bold text-lg", 
+                    currentResult.overallScore ? "text-blue-600" : "text-slate-400 text-sm font-normal"
+                 )}>
+                   {currentResult.overallScore ? currentResult.overallScore : 'Calculating...'}
+                 </span>
                </div>
              </div>
            ) : (

@@ -29,11 +29,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="min-h-screen bg-slate-50">
         <Sidebar isCollapsed={isCollapsed} toggleSidebar={() => setIsCollapsed(!isCollapsed)} />
         
-        {/* Top Right User Avatar - Fixed or Absolute */}
-        <div className="fixed top-4 right-4 z-50">
-           <UserAvatar />
-        </div>
-
         <main 
           className={cn(
             "transition-all duration-300 ease-in-out min-h-screen",

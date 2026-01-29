@@ -175,7 +175,6 @@ You must return a valid JSON object strictly following this structure. Do not in
 
 {
   "topic": "The essay topic (inferred if not provided)",
-  "overallScore": number (0-9, 0.5 increments),
   "dimensions": {
     "taskResponse": {
       "score": number,
@@ -215,6 +214,7 @@ You must return a valid JSON object strictly following this structure. Do not in
       }
     }
   },
+  "overallScore": number (0-9, 0.5 increments),
   "paragraphRewrites": [
     {
       "paragraphType": "Introduction",

@@ -15,9 +15,12 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguageState] = useState<Language>('en');
 
   useEffect(() => {
-    const savedLang = localStorage.getItem('ielts_language_preference') as Language;
-    if (savedLang && (savedLang === 'en' || savedLang === 'zh')) {
-      setLanguageState(savedLang);
+    // Check for saved preference only on mount to avoid hydration mismatch
+    if (typeof window !== 'undefined') {
+        const savedLang = localStorage.getItem('ielts_language_preference') as Language;
+        if (savedLang && (savedLang === 'en' || savedLang === 'zh')) {
+            setLanguageState(savedLang);
+        }
     }
   }, []);
 

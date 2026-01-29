@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/client';
 import { 
   Search, 
   Calendar, 
   ChevronRight, 
   FileText,
-  ArrowUpDown
+  ArrowUpDown,
+  AlertTriangle
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -18,10 +19,7 @@ function cn(...inputs: ClassValue[]) {
 }
 
 // Initialize Supabase Client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = createClient();
 
 // Types
 interface EssayRecord {
@@ -44,6 +42,7 @@ type SortOption = 'date_desc' | 'date_asc' | 'score_desc' | 'score_asc';
 export default function HistoryPage() {
   const [history, setHistory] = useState<EssayRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOption, setSortOption] = useState<SortOption>('date_desc');
 
@@ -66,49 +65,50 @@ export default function HistoryPage() {
         return;
       }
 
-      // Fetch evaluations joined with essays
-      // We want all evaluations where the related essay belongs to the user
-      // RLS should handle the "belongs to user" part if we filter by user_id in essays,
-      // but since we query 'evaluations', the RLS policy on evaluations checks for essay ownership.
-      // So simple select should work.
-      
+      // Fetch essays with their evaluations
+      // We query 'essays' directly as it's the root entity owned by the user
       const { data, error } = await supabase
-        .from('evaluations')
+        .from('essays')
         .select(`
           id,
-          overall_band,
-          band_scores,
-          created_at,
-          essays!inner (
+          question_text,
+          task_type,
+          submitted_at,
+          evaluations (
             id,
-            question_text,
-            task_type,
-            submitted_at
+            overall_band,
+            band_scores,
+            created_at
           )
         `)
-        .order('created_at', { ascending: false });
+        .order('submitted_at', { ascending: false });
 
       if (error) throw error;
 
       if (data) {
-        const formattedData: EssayRecord[] = data.map((item) => {
-          // Handle potential array response for joined table
-          const essayData = Array.isArray(item.essays) ? item.essays[0] : item.essays;
-          
-          return {
-            id: item.id,
-            essay_id: essayData.id,
-            topic: essayData.question_text,
-            overall_score: Number(item.overall_band),
-            dimensions: item.band_scores as unknown as EssayRecord['dimensions'],
-            created_at: essayData.submitted_at || item.created_at, // Use submission time preference
-            task_type: essayData.task_type
-          };
-        });
+        const formattedData: EssayRecord[] = data
+          .filter(essay => essay.evaluations && (Array.isArray(essay.evaluations) ? essay.evaluations.length > 0 : essay.evaluations))
+          .map((essay) => {
+            const evaluation = Array.isArray(essay.evaluations) ? essay.evaluations[0] : essay.evaluations;
+            if (!evaluation) return null;
+
+            return {
+              id: evaluation.id,
+              essay_id: essay.id,
+              topic: essay.question_text,
+              overall_score: Number(evaluation.overall_band),
+              dimensions: evaluation.band_scores as unknown as EssayRecord['dimensions'] || {},
+              created_at: essay.submitted_at || evaluation.created_at,
+              task_type: essay.task_type
+            };
+          })
+          .filter((item): item is EssayRecord => item !== null);
+
         setHistory(formattedData);
       }
     } catch (error) {
       console.error('Error fetching history:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load history');
     } finally {
       setLoading(false);
     }
@@ -181,7 +181,21 @@ export default function HistoryPage() {
       </div>
 
       {/* Content */}
-      {loading ? (
+      {error ? (
+        <div className="text-center py-16 bg-white rounded-2xl border border-red-100">
+          <div className="w-16 h-16 bg-red-50 rounded-full mx-auto mb-4 flex items-center justify-center">
+             <AlertTriangle className="w-8 h-8 text-red-400" />
+          </div>
+          <h3 className="text-xl font-bold text-slate-900 mb-2">Error loading history</h3>
+          <p className="text-slate-500 mb-6 max-w-sm mx-auto">{error}</p>
+          <button 
+            onClick={fetchHistory}
+            className="text-blue-600 font-medium hover:underline"
+          >
+            Try again
+          </button>
+        </div>
+      ) : loading ? (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-24 bg-slate-100 rounded-xl animate-pulse" />
@@ -223,7 +237,7 @@ export default function HistoryPage() {
 
                 {/* Dimensions */}
                 <div className="hidden md:flex gap-3 shrink-0">
-                  {Object.entries(item.dimensions).map(([key, score]) => (
+                  {item.dimensions && Object.entries(item.dimensions).map(([key, score]) => (
                     <div key={key} className="flex flex-col items-center gap-1 min-w-[32px]">
                       <div className="text-[10px] font-bold text-slate-400 uppercase">{key}</div>
                       <div className={cn(

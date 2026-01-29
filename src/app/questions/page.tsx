@@ -1,19 +1,20 @@
 'use client';
 
+import { createClient } from '@/lib/supabase/client';
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { HelpCircle, BookOpen, Filter, ArrowRight, Map as MapIcon, BarChart, PieChart, MessageSquare, PenTool, LayoutTemplate, FileText, Loader2, CheckCircle2 } from 'lucide-react';
 import { Question } from '@/types/question';
-import { supabase } from '@/lib/supabase';
 
 export default function QuestionsPage() {
   const router = useRouter();
+  const supabase = createClient();
   const [taskType, setTaskType] = useState<1 | 2>(2);
   const [activeTab, setActiveTab] = useState<'books' | 'category'>('books');
   
   // Data State
-  const [questions, setQuestions] = useState<(Question & { latest_score?: number })[]>([]);
   const [loading, setLoading] = useState(false);
+  const [questions, setQuestions] = useState<(Question & { latest_score?: number })[]>([]);
 
   // Filters
   const [selectedBook, setSelectedBook] = useState<number | null>(null);
