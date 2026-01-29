@@ -77,7 +77,8 @@ function WorkshopContent() {
        // Poll for the saved ID in Supabase
        // The server saves it in the background ('after'). It might take a moment.
        const checkSaved = async (attempts = 0) => {
-         if (attempts > 10) {
+         // Increase attempts to 60 (approx 60 seconds) to allow for slow background saves
+         if (attempts > 60) {
            setError("Evaluation saved, but could not retrieve ID. Please check your history.");
            return;
          }

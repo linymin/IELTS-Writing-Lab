@@ -4,19 +4,6 @@ import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { RefreshCw, AlertTriangle, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { experimental_useObject as useObject } from '@ai-sdk/react';
-import { z } from 'zod';
-
-// Define schema for UI feedback (same as Workshop)
-const feedbackSchema = z.object({
-  overallScore: z.number().optional(),
-  dimensions: z.object({
-    taskResponse: z.object({ score: z.number().optional() }).optional(),
-    coherenceCohesion: z.object({ score: z.number().optional() }).optional(),
-    lexicalResource: z.object({ score: z.number().optional() }).optional(),
-    grammaticalRangeAccuracy: z.object({ score: z.number().optional() }).optional(),
-  }).optional(),
-}).passthrough();
 
 function ProcessingContent() {
   const router = useRouter();
@@ -27,68 +14,12 @@ function ProcessingContent() {
   const [loadingStep, setLoadingStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [statusText, setStatusText] = useState("Initializing...");
-  const [hasStarted, setHasStarted] = useState(false);
-
-  // Streaming Object Hook
-  const { object: streamingResult, submit, isLoading, error: streamError } = useObject({
-    api: '/api/evaluate',
-    schema: feedbackSchema,
-    headers: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (token) {
-        return { 'Authorization': `Bearer ${token}` } as Record<string, string>;
-      }
-      return {} as Record<string, string>;
-    },
-    onFinish: async ({ object, error }: { object?: any, error?: Error }) => {
-       if (error) {
-         setError("Evaluation failed: " + error.message);
-         return;
-       }
-       
-       // Poll for the saved ID in Supabase
-       let attempts = 0;
-       const checkSaved = async () => {
-         // Increased timeout and max attempts for slower backend processing
-         if (attempts > 30) { 
-           setError("Evaluation saved, but could not retrieve ID. Please check your history.");
-           return;
-         }
-         attempts++;
-         
-         const { data: { user } } = await supabase.auth.getUser();
-         if (!user) return;
-
-         // We need to match the specific rewrite essay we just submitted.
-         // Since we don't have the new essay ID returned by the stream yet (it's async),
-         // we rely on finding the LATEST submission by this user.
-         // This is generally safe for a single user session.
-         const { data } = await supabase
-           .from('essays')
-           .select('evaluations(id)')
-           .eq('user_id', user.id)
-           .order('submitted_at', { ascending: false })
-           .limit(1)
-           .single();
-
-         if (data?.evaluations?.[0]?.id) {
-           // Clear storage and redirect
-           if (storageKey) sessionStorage.removeItem(storageKey);
-           router.replace(`/evaluation/${data.evaluations[0].id}`);
-         } else {
-           setTimeout(checkSaved, 2000); // Poll every 2 seconds
-         }
-       };
-       
-       await checkSaved();
-    }
-  });
 
   // Simulated progress
   useEffect(() => {
     const interval = setInterval(() => {
       setLoadingStep(prev => {
+        // Slow down as we get closer to 90%
         if (prev >= 90) return prev + 0.1;
         if (prev >= 60) return prev + 0.5;
         return prev + 2;
@@ -97,7 +28,7 @@ function ProcessingContent() {
     return () => clearInterval(interval);
   }, []);
 
-  // Update status text
+  // Update status text based on progress
   useEffect(() => {
     if (loadingStep < 30) setStatusText("Analyzing essay structure...");
     else if (loadingStep < 60) setStatusText("Checking grammar and vocabulary...");
@@ -105,10 +36,8 @@ function ProcessingContent() {
     else setStatusText("Finalizing report...");
   }, [loadingStep]);
 
-  // Trigger submission
   useEffect(() => {
-    const startProcess = async () => {
-      if (hasStarted) return;
+    const processEvaluation = async () => {
       if (!storageKey) {
         setError("Missing evaluation data key.");
         return;
@@ -128,18 +57,106 @@ function ProcessingContent() {
         return;
       }
 
-      setHasStarted(true);
-      submit(payload);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+
+        if (!token) {
+           // Wait a bit for auth to restore if needed, or fail
+           // For now fail immediately as rewrite page checks auth before redirect
+           throw new Error("Authentication required.");
+        }
+
+        // Use streaming API but wait for full response
+        // Note: The rewrite flow currently expects a single JSON response, not a stream
+        // We need to adapt this to handle the streaming response or use a non-streaming endpoint
+        // For now, we'll accumulate the stream or assume the API can handle non-streaming mode
+        // Actually, /api/evaluate IS a streaming endpoint now.
+        // We need to use experimental_useObject or similar, OR consume the stream manually.
+        // Since this page is "Processing...", consuming manually is fine.
+        
+        const res = await fetch('/api/evaluate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+           if (res.status === 401) throw new Error("Session expired. Please log in.");
+           const errorData = await res.json();
+           throw new Error(errorData.error || 'Evaluation failed');
+        }
+
+        // Consume the stream to get the final object
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder();
+        let resultText = '';
+        
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            resultText += decoder.decode(value, { stream: true });
+          }
+        }
+        
+        // The stream returns a series of JSON objects (protocol). 
+        // We need the final accumulated state or the ID that is saved.
+        // BUT, /api/evaluate saves to DB in the background (after).
+        // It does NOT return the ID in the stream response itself usually.
+        // The stream response is the AI content.
+        
+        // Wait for the background save to complete.
+        // We need to poll Supabase for the new evaluation ID, similar to Workshop page.
+        
+        let attempts = 0;
+        const checkSaved = async (): Promise<string> => {
+           // Increase attempts to 60 (approx 60 seconds) to allow for slow background saves
+           if (attempts > 60) throw new Error("Evaluation saved, but could not retrieve ID.");
+           attempts++;
+           
+           const { data, error } = await supabase
+             .from('essays')
+             .select('evaluations(id)')
+             .eq('user_id', session!.user.id)
+             .order('submitted_at', { ascending: false })
+             .limit(1)
+             .single();
+             
+           if (data?.evaluations?.[0]?.id) {
+             return data.evaluations[0].id;
+           }
+           
+           await new Promise(r => setTimeout(r, 1000));
+           return checkSaved();
+        };
+        
+        const newEvalId = await checkSaved();
+
+        if (newEvalId) {
+          // Success! Clear storage and redirect
+          sessionStorage.removeItem(storageKey);
+          router.replace(`/evaluation/${newEvalId}`);
+        } else {
+          throw new Error("No evaluation ID returned");
+        }
+
+      } catch (err) {
+        console.error("Processing error:", err);
+        setError(err instanceof Error ? err.message : 'Something went wrong');
+      }
     };
 
-    // Small delay to ensure UI renders first
+    // Small delay to ensure UI renders first and simulation feels real
     const timer = setTimeout(() => {
-      startProcess();
-    }, 500);
+      processEvaluation();
+    }, 1000);
 
     return () => clearTimeout(timer);
-  }, [storageKey, hasStarted, submit]);
-
+  }, [storageKey, router]);
 
   if (error) {
     return (

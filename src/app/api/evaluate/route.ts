@@ -42,21 +42,13 @@ async function saveEvaluationToDB(
       : supabase;
 
     // A. Save Essay
-    // Validate question_id
-    let validQuestionId: string | undefined = originalBody.question_id || undefined;
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (validQuestionId && !uuidRegex.test(validQuestionId)) {
-       console.warn(`[Background] Invalid question_id received: ${validQuestionId}. Treating as undefined.`);
-       validQuestionId = undefined;
-    }
-
     const { data: essayData, error: essayError } = await supabaseClient
       .from('essays')
       .insert({
         user_id: userId,
         task_type: originalBody.task_type,
         question_text: data.topic,
-        question_id: validQuestionId,
+        question_id: originalBody.question_id || null,
         essay_body: originalBody.essay_body,
         word_count: originalBody.essay_body.split(/\s+/).length
       })
@@ -191,9 +183,10 @@ ${body.essay_body}
     const modelId = process.env.DOUBAO_MODEL || 'ep-20250207172827-2k29f'; 
     console.log(`[Evaluate] Using Model ID: ${modelId}`);
 
-    // 4. Stream Object
+    // Initialize OpenAI provider inside the handler or try-catch block to prevent crash on init
     try {
-      const result = await streamObject({
+      // 4. Stream Object
+      const result = streamObject({
         model: doubao(modelId),
         schema: getEvaluationSchema(body.task_type),
         system: finalSystemPrompt,
