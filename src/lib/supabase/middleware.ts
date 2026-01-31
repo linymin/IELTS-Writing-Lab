@@ -49,6 +49,12 @@ export async function updateSession(request: NextRequest) {
 
   // If user is NOT logged in and tries to access a protected route, redirect to /login
   if (!user && !isPublicPath) {
+    // If it's an API route, return 401 JSON instead of redirecting
+    // This prevents the "MIME type text/html" error when fetching API
+    if (path.startsWith('/api/')) {
+       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
