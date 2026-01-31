@@ -206,7 +206,14 @@ ${body.essay_body}
       }
     });
 
-    return result.toTextStreamResponse();
+    // IMPORTANT: Use toDataStreamResponse instead of toTextStreamResponse
+    // This aligns with useObject() hook and includes headers to disable buffering
+    return result.toDataStreamResponse({
+      headers: {
+        'X-Accel-Buffering': 'no', // Critical for Nginx/Proxy environments
+        'Cache-Control': 'no-cache, no-transform', // Prevent other caching
+      }
+    });
 
   } catch (error: any) {
     console.error('Evaluation error:', error);
