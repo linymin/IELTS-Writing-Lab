@@ -7,8 +7,20 @@ import { createClient } from '@supabase/supabase-js';
 import { getSystemPrompt, IELTS_TASK1_RUBRIC_MD, IELTS_TASK2_RUBRIC_MD } from '@/lib/prompts/ielts-rubric';
 import { getEvaluationSchema } from '@/lib/schemas/evaluation';
 
-export const runtime = 'nodejs'; // Use Node.js Runtime to support 'after' API
+export const runtime = 'edge'; // Use Edge Runtime for better streaming support
 export const maxDuration = 300; // Allow up to 5 minutes for AI processing
+
+// CORS headers for all responses
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*', // For dev; restrict in prod if needed
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+// Handle OPTIONS preflight requests
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders });
+}
 
 /**
  * POST /api/evaluate
@@ -127,14 +139,14 @@ export async function POST(request: NextRequest) {
     if (!body.essay_body || !body.task_type || !body.question_text) {
       return NextResponse.json(
         { error: 'Missing required fields: essay_body, task_type, question_text' },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
     if (body.essay_body.length < 50) {
       return NextResponse.json(
         { error: 'Essay is too short to evaluate (minimum 50 characters).' },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -142,20 +154,25 @@ export async function POST(request: NextRequest) {
     const authHeader = request.headers.get('Authorization');
     let userId: string | null = null;
 
-    if (authHeader) {
-      const supabaseClient = createClient(supabaseUrl, supabaseKey, {
-        global: { headers: { Authorization: authHeader } }
-      });
-      const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
-      if (user) userId = user.id;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      // Use the token explicitly to get the user
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      
+      if (authError) {
+         console.error(`[Auth] Token verification failed: ${authError.message}`);
+      } else if (user) {
+         userId = user.id;
+         console.log(`[Auth] Request authorized for user: ${userId}`);
+      }
     } else {
-      console.warn("No Authorization header found.");
+      console.warn("[Auth] No Bearer Authorization header found.");
     }
 
     if (!userId) {
        return NextResponse.json(
         { error: 'Authentication required to save results. Please refresh and try again.' },
-        { status: 401 }
+        { status: 401, headers: corsHeaders }
       );
     }
 
@@ -177,7 +194,7 @@ ${body.essay_body}
       console.error("Critical Error: DOUBAO_API_KEY or OPENAI_API_KEY is missing in environment variables.");
       return NextResponse.json(
         { error: 'Server configuration error: Missing API Key' },
-        { status: 500 }
+        { status: 500, headers: corsHeaders }
       );
     }
 
@@ -206,20 +223,19 @@ ${body.essay_body}
       }
     });
 
-    // IMPORTANT: Use toDataStreamResponse instead of toTextStreamResponse
-    // This aligns with useObject() hook and includes headers to disable buffering
-    return result.toDataStreamResponse({
-      headers: {
-        'X-Accel-Buffering': 'no', // Critical for Nginx/Proxy environments
-        'Cache-Control': 'no-cache, no-transform', // Prevent other caching
-      }
+    const response = result.toTextStreamResponse();
+    // Add CORS headers to the stream response
+    Object.entries(corsHeaders).forEach(([key, value]) => {
+      response.headers.set(key, value);
     });
+    
+    return response;
 
   } catch (error: any) {
     console.error('Evaluation error:', error);
     return NextResponse.json(
       { error: `Failed to initiate evaluation: ${error.message}` }, 
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }

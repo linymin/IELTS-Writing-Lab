@@ -45,16 +45,11 @@ export async function updateSession(request: NextRequest) {
     path.startsWith('/auth') || 
     path.startsWith('/_next') || 
     path === '/favicon.ico' ||
-    path.match(/\.(svg|png|jpg|jpeg|gif|webp)$/)
+    path.match(/\.(svg|png|jpg|jpeg|gif|webp)$/) ||
+    path.startsWith('/api') // Exclude API routes from redirect logic
 
   // If user is NOT logged in and tries to access a protected route, redirect to /login
   if (!user && !isPublicPath) {
-    // If it's an API route, return 401 JSON instead of redirecting
-    // This prevents the "MIME type text/html" error when fetching API
-    if (path.startsWith('/api/')) {
-       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)

@@ -60,13 +60,22 @@ function WorkshopContent() {
   const { object: streamingResult, submit, isLoading, error: streamError } = useObject({
     api: '/api/evaluate',
     schema: feedbackSchema,
-    headers: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (token) {
-        return { 'Authorization': `Bearer ${token}` } as Record<string, string>;
-      }
-      return {} as Record<string, string>;
+    // Use custom fetch to ensure Authorization header is always fresh
+    fetch: async (url, options) => {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        
+        if (!token) {
+            throw new Error("User session not found. Please log in.");
+        }
+
+        const headers = new Headers(options?.headers);
+        headers.set('Authorization', `Bearer ${token}`);
+        
+        return fetch(url, {
+            ...options,
+            headers,
+        });
     },
     onFinish: async ({ object, error }: { object?: any, error?: Error }) => {
        if (error) {
