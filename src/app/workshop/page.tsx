@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { experimental_useObject as useObject } from '@ai-sdk/react'; // Use experimental_useObject from @ai-sdk/react
+import { useEvaluationPoller } from '@/hooks/useEvaluationPoller'; // Use the shared hook
 import { 
   ArrowRight, 
   RefreshCw,
@@ -39,6 +40,7 @@ function WorkshopContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
+  const { pollForEvaluationId } = useEvaluationPoller();
   const qid = searchParams.get('qid'); // Legacy mock support
   const question_id = searchParams.get('question_id'); // Supabase support
 
@@ -74,36 +76,19 @@ function WorkshopContent() {
        
        setIsRedirecting(true);
 
-       // Poll for the saved ID in Supabase
-       // The server saves it in the background ('after'). It might take a moment.
-       const checkSaved = async (attempts = 0) => {
-         // Increase attempts to 60 (approx 60 seconds) to allow for slow background saves
-         if (attempts > 60) {
-           setError("Evaluation saved, but could not retrieve ID. Please check your history.");
-           return;
-         }
-         
-         const { data: { user } } = await supabase.auth.getUser();
-         if (!user) return;
-
-         // Look for the most recent evaluation for this essay content (or just recent one)
-         // We can match by exact essay body length or just take the latest.
-         const { data, error } = await supabase
-           .from('essays')
-           .select('evaluations(id)')
-           .eq('user_id', user.id)
-           .order('submitted_at', { ascending: false })
-           .limit(1)
-           .single();
-
-         if (data?.evaluations?.[0]?.id) {
-           router.push(`/evaluation/${data.evaluations[0].id}`);
-         } else {
-           setTimeout(() => checkSaved(attempts + 1), 1000);
-         }
-       };
-       
-       await checkSaved();
+       // Poll for the saved ID in Supabase using shared hook
+       try {
+           const { data: { user } } = await supabase.auth.getUser();
+           if (!user) throw new Error("User not authenticated");
+           
+           const evalId = await pollForEvaluationId(user.id);
+           if (evalId) {
+               router.push(`/evaluation/${evalId}`);
+           }
+       } catch (err) {
+           setError(err instanceof Error ? err.message : "Failed to retrieve evaluation.");
+           setIsRedirecting(false);
+       }
     }
   });
 
@@ -113,21 +98,6 @@ function WorkshopContent() {
       setError("System Configuration Error: Supabase URL or Key is missing. Please check your .env.local file.");
     }
   }, []);
-
-  // Auto-login logic removed as it conflicts with middleware and RLS
-  // Authentication should be handled by the middleware and login page
-  /*
-  useEffect(() => {
-    const initAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        const email = `user_${Date.now()}@temp.ielts`;
-        await supabase.auth.signUp({ email, password: 'TempPassword123!' });
-      }
-    };
-    initAuth();
-  }, []);
-  */
 
   // Load Question from ID (Mock or Supabase)
   useEffect(() => {
@@ -201,9 +171,16 @@ function WorkshopContent() {
   };
 
   const handleEvaluate = async () => {
+    // 1. Validate Essay Length
     if (!essay.trim() || essay.length < 50) {
       setError("Essay is too short. Please write at least 50 characters.");
       return;
+    }
+
+    // 2. Validate Topic
+    if (!topic.trim()) {
+        setError("Question topic is missing. Please enter a question or select one from the question bank.");
+        return;
     }
 
     setError(null);

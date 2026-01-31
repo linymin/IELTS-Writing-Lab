@@ -1,164 +1,113 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { RefreshCw, AlertTriangle, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { experimental_useObject as useObject } from '@ai-sdk/react';
+import { useEvaluationPoller } from '@/hooks/useEvaluationPoller';
+import { z } from 'zod';
+import { cn } from '@/lib/utils';
+
+// Define schema (can be loose since we don't display detailed data here, but needed for useObject)
+const feedbackSchema = z.object({
+  overallScore: z.number().optional(),
+  dimensions: z.object({
+    taskResponse: z.object({ score: z.number().optional() }).optional(),
+    coherenceCohesion: z.object({ score: z.number().optional() }).optional(),
+    lexicalResource: z.object({ score: z.number().optional() }).optional(),
+    grammaticalRangeAccuracy: z.object({ score: z.number().optional() }).optional(),
+  }).optional(),
+}).passthrough();
 
 function ProcessingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const storageKey = searchParams.get('key');
   const supabase = createClient();
+  const { pollForEvaluationId } = useEvaluationPoller();
   
-  const [loadingStep, setLoadingStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [statusText, setStatusText] = useState("Initializing...");
+  const hasSubmitted = useRef(false);
 
-  // Simulated progress
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setLoadingStep(prev => {
-        // Slow down as we get closer to 90%
-        if (prev >= 90) return prev + 0.1;
-        if (prev >= 60) return prev + 0.5;
-        return prev + 2;
-      });
-    }, 200);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Update status text based on progress
-  useEffect(() => {
-    if (loadingStep < 30) setStatusText("Analyzing essay structure...");
-    else if (loadingStep < 60) setStatusText("Checking grammar and vocabulary...");
-    else if (loadingStep < 90) setStatusText("Generating scoring and feedback...");
-    else setStatusText("Finalizing report...");
-  }, [loadingStep]);
-
-  useEffect(() => {
-    const processEvaluation = async () => {
-      if (!storageKey) {
-        setError("Missing evaluation data key.");
-        return;
-      }
-
-      const rawData = sessionStorage.getItem(storageKey);
-      if (!rawData) {
-        setError("Evaluation data not found or expired. Please try submitting again.");
-        return;
-      }
-
-      let payload;
-      try {
-        payload = JSON.parse(rawData);
-      } catch (e) {
-        setError("Invalid data format.");
-        return;
-      }
-
-      try {
+  // useObject hook for robust streaming
+  const { object: streamingResult, submit, isLoading, error: streamError } = useObject({
+    api: '/api/evaluate',
+    schema: feedbackSchema,
+    headers: async () => {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
-
-        if (!token) {
-           // Wait a bit for auth to restore if needed, or fail
-           // For now fail immediately as rewrite page checks auth before redirect
-           throw new Error("Authentication required.");
+        if (token) {
+          return { 'Authorization': `Bearer ${token}` } as Record<string, string>;
         }
-
-        // Use streaming API but wait for full response
-        // Note: The rewrite flow currently expects a single JSON response, not a stream
-        // We need to adapt this to handle the streaming response or use a non-streaming endpoint
-        // For now, we'll accumulate the stream or assume the API can handle non-streaming mode
-        // Actually, /api/evaluate IS a streaming endpoint now.
-        // We need to use experimental_useObject or similar, OR consume the stream manually.
-        // Since this page is "Processing...", consuming manually is fine.
-        
-        const res = await fetch('/api/evaluate', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(payload)
-        });
-
-        if (!res.ok) {
-           if (res.status === 401) throw new Error("Session expired. Please log in.");
-           const errorData = await res.json();
-           throw new Error(errorData.error || 'Evaluation failed');
-        }
-
-        // Consume the stream to get the final object
-        const reader = res.body?.getReader();
-        const decoder = new TextDecoder();
-        let resultText = '';
-        
-        if (reader) {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            resultText += decoder.decode(value, { stream: true });
-          }
+        return {} as Record<string, string>;
+    },
+    onFinish: async ({ object, error }) => {
+        if (error) {
+            setError("Evaluation stream failed: " + error.message);
+            return;
         }
         
-        // The stream returns a series of JSON objects (protocol). 
-        // We need the final accumulated state or the ID that is saved.
-        // BUT, /api/evaluate saves to DB in the background (after).
-        // It does NOT return the ID in the stream response itself usually.
-        // The stream response is the AI content.
-        
-        // Wait for the background save to complete.
-        // We need to poll Supabase for the new evaluation ID, similar to Workshop page.
-        
-        let attempts = 0;
-        const checkSaved = async (): Promise<string> => {
-           // Increase attempts to 60 (approx 60 seconds) to allow for slow background saves
-           if (attempts > 60) throw new Error("Evaluation saved, but could not retrieve ID.");
-           attempts++;
-           
-           const { data, error } = await supabase
-             .from('essays')
-             .select('evaluations(id)')
-             .eq('user_id', session!.user.id)
-             .order('submitted_at', { ascending: false })
-             .limit(1)
-             .single();
-             
-           if (data?.evaluations?.[0]?.id) {
-             return data.evaluations[0].id;
-           }
-           
-           await new Promise(r => setTimeout(r, 1000));
-           return checkSaved();
-        };
-        
-        const newEvalId = await checkSaved();
+        setStatusText("Finalizing report...");
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error("User not authenticated");
+            
+            // Poll for the saved evaluation ID using shared hook
+            const newEvalId = await pollForEvaluationId(user.id);
+            if (newEvalId) {
+                // Success! Clear storage and redirect
+                if (storageKey) sessionStorage.removeItem(storageKey);
+                router.replace(`/evaluation/${newEvalId}`);
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to retrieve evaluation result.");
+        }
+    }
+  });
 
-        if (newEvalId) {
-          // Success! Clear storage and redirect
-          sessionStorage.removeItem(storageKey);
-          router.replace(`/evaluation/${newEvalId}`);
-        } else {
-          throw new Error("No evaluation ID returned");
+  // Trigger Submission
+  useEffect(() => {
+    if (hasSubmitted.current) return;
+
+    const initSubmission = async () => {
+        hasSubmitted.current = true; // Prevent double submission
+        
+        if (!storageKey) {
+            setError("Missing evaluation data key.");
+            return;
         }
 
-      } catch (err) {
-        console.error("Processing error:", err);
-        setError(err instanceof Error ? err.message : 'Something went wrong');
-      }
+        const rawData = sessionStorage.getItem(storageKey);
+        if (!rawData) {
+            setError("Evaluation data not found or expired. Please try submitting again.");
+            return;
+        }
+
+        let payload;
+        try {
+            payload = JSON.parse(rawData);
+        } catch (e) {
+            setError("Invalid data format.");
+            return;
+        }
+        
+        setStatusText("Connecting to AI examiner...");
+        // Initiate streaming submission
+        submit(payload);
     };
 
-    // Small delay to ensure UI renders first and simulation feels real
-    const timer = setTimeout(() => {
-      processEvaluation();
-    }, 1000);
-
+    // Small delay to ensure hydration
+    const timer = setTimeout(initSubmission, 500);
     return () => clearTimeout(timer);
-  }, [storageKey, router]);
+  }, [storageKey, submit]);
 
-  if (error) {
+  // Safe access to streaming data
+  // @ts-ignore - The object shape is inferred loosely but we know it matches the schema
+  const currentResult = streamingResult as any;
+
+  if (error || streamError) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 text-center max-w-md w-full">
@@ -166,7 +115,7 @@ function ProcessingContent() {
              <AlertTriangle className="w-8 h-8 text-red-600" />
            </div>
            <h2 className="text-xl font-bold text-slate-900 mb-2">Evaluation Failed</h2>
-           <p className="text-slate-500 mb-6">{error}</p>
+           <p className="text-slate-500 mb-6">{error || streamError?.message}</p>
            <button 
              onClick={() => router.back()}
              className="px-6 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors"
@@ -186,22 +135,62 @@ function ProcessingContent() {
          </div>
          
          <h2 className="text-2xl font-bold text-slate-900 mb-2">Evaluating your Rewrite...</h2>
-         <p className="text-slate-500 mb-8 min-h-[1.5rem] transition-all duration-300">{statusText}</p>
+         <p className="text-slate-500 mb-8 min-h-[1.5rem] transition-all duration-300">
+            {currentResult ? "Generating detailed feedback..." : statusText}
+         </p>
          
-         <div className="max-w-md mx-auto">
-           <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-             <div 
-               className="h-full bg-blue-600 transition-all duration-300 ease-out" 
-               style={{ width: `${Math.min(loadingStep, 100)}%` }}
-             ></div>
+         {/* Real-time Streaming Feedback */}
+         {currentResult ? (
+           <div className="text-left mt-6 space-y-3 bg-slate-50 p-4 rounded-lg border border-slate-100 animate-in slide-in-from-bottom-2 fade-in duration-500">
+             {/* Show dimensions as they appear */}
+             <div className="space-y-1 text-sm text-slate-500">
+               <div className="flex justify-between">
+                 <span>Task Response:</span>
+                 <span className={currentResult.dimensions?.taskResponse?.score ? "text-green-600 font-bold" : "text-slate-300"}>
+                   {currentResult.dimensions?.taskResponse?.score || 'Pending...'}
+                 </span>
+               </div>
+               <div className="flex justify-between">
+                 <span>Coherence & Cohesion:</span>
+                 <span className={currentResult.dimensions?.coherenceCohesion?.score ? "text-green-600 font-bold" : "text-slate-300"}>
+                   {currentResult.dimensions?.coherenceCohesion?.score || 'Pending...'}
+                 </span>
+               </div>
+               <div className="flex justify-between">
+                 <span>Lexical Resource:</span>
+                 <span className={currentResult.dimensions?.lexicalResource?.score ? "text-green-600 font-bold" : "text-slate-300"}>
+                   {currentResult.dimensions?.lexicalResource?.score || 'Pending...'}
+                 </span>
+               </div>
+               <div className="flex justify-between">
+                 <span>Grammar:</span>
+                 <span className={currentResult.dimensions?.grammaticalRangeAccuracy?.score ? "text-green-600 font-bold" : "text-slate-300"}>
+                   {currentResult.dimensions?.grammaticalRangeAccuracy?.score || 'Pending...'}
+                 </span>
+               </div>
+             </div>
+
+             {/* Overall Score at the bottom */}
+             <div className="flex justify-between items-center pt-2 border-t border-slate-200 mt-2">
+               <span className="text-slate-900 font-medium">Overall Score:</span>
+               <span className={cn(
+                  "font-bold text-lg", 
+                  currentResult.overallScore ? "text-blue-600" : "text-slate-400 text-sm font-normal"
+               )}>
+                 {currentResult.overallScore ? currentResult.overallScore : 'Calculating...'}
+               </span>
+             </div>
            </div>
-           <div className="flex justify-between mt-3 text-xs text-slate-400 font-medium">
-             <span className={loadingStep > 10 ? "text-blue-600 transition-colors" : ""}>Structure</span>
-             <span className={loadingStep > 40 ? "text-blue-600 transition-colors" : ""}>Grammar</span>
-             <span className={loadingStep > 70 ? "text-blue-600 transition-colors" : ""}>Cohesion</span>
-             <span className={loadingStep > 90 ? "text-blue-600 transition-colors" : ""}>Scoring</span>
+         ) : (
+           <div className="max-w-md mx-auto">
+             <div className="h-2 bg-slate-100 rounded-full overflow-hidden w-64 mx-auto">
+                <div className="h-full bg-slate-200 animate-pulse rounded-full w-full"></div>
+             </div>
+             <p className="text-xs text-slate-400 mt-3">Connecting to AI examiner...</p>
            </div>
-         </div>
+         )}
+         
+         <p className="text-xs text-slate-400 mt-6">This may take up to 30 seconds.</p>
       </div>
     </div>
   );

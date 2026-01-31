@@ -7,6 +7,7 @@ import { createClient } from '@supabase/supabase-js';
 import { getSystemPrompt, IELTS_TASK1_RUBRIC_MD, IELTS_TASK2_RUBRIC_MD } from '@/lib/prompts/ielts-rubric';
 import { getEvaluationSchema } from '@/lib/schemas/evaluation';
 
+export const runtime = 'edge'; // Use Edge Runtime for better streaming support
 export const maxDuration = 300; // Allow up to 5 minutes for AI processing
 
 /**
@@ -16,10 +17,10 @@ export const maxDuration = 300; // Allow up to 5 minutes for AI processing
  */
 
 // Initialize OpenAI provider with Doubao configuration
-// const doubao = createOpenAI({
-//   apiKey: process.env.DOUBAO_API_KEY || process.env.OPENAI_API_KEY,
-//   baseURL: process.env.DOUBAO_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3",
-// });
+const doubao = createOpenAI({
+  apiKey: process.env.DOUBAO_API_KEY || process.env.OPENAI_API_KEY,
+  baseURL: process.env.DOUBAO_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3",
+});
 
 // Initialize Supabase Client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -183,43 +184,34 @@ ${body.essay_body}
     const modelId = process.env.DOUBAO_MODEL || 'ep-20250207172827-2k29f'; 
     console.log(`[Evaluate] Using Model ID: ${modelId}`);
 
-    // Initialize OpenAI provider inside the handler or try-catch block to prevent crash on init
-    try {
-      const doubao = createOpenAI({
-        apiKey: apiKey,
-        baseURL: process.env.DOUBAO_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3",
-      });
+    // 4. Stream Object
+    const result = streamObject({
+      model: doubao(modelId),
+      schema: getEvaluationSchema(body.task_type),
+      system: finalSystemPrompt,
+      prompt: userPrompt,
+      temperature: 0.3,
+    });
 
-      // 4. Stream Object
-      const result = streamObject({
-        model: doubao(modelId),
-        schema: getEvaluationSchema(body.task_type),
-        system: finalSystemPrompt,
-        prompt: userPrompt,
-        temperature: 0.3,
-        onFinish: async ({ object }) => {
-          if (object && userId) {
-            // Use 'after' to ensure DB operations complete even if response closes
-            after(async () => {
-               await saveEvaluationToDB(object, userId!, body, authHeader);
-            });
-          }
+    // Register background task immediately at the top level
+    // This awaits the FULL object resolution in the background
+    after(async () => {
+      try {
+        const object = await result.object;
+        if (object && userId) {
+           await saveEvaluationToDB(object, userId!, body, authHeader);
         }
-      });
+      } catch (err) {
+        console.error("Background processing error:", err);
+      }
+    });
 
-      return result.toTextStreamResponse();
-    } catch (streamError: any) {
-      console.error("Stream Object Initialization Error:", streamError);
-      return NextResponse.json(
-        { error: `AI Service Connection Failed: ${streamError.message}` },
-        { status: 500 }
-      );
-    }
+    return result.toTextStreamResponse();
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Evaluation error:', error);
     return NextResponse.json(
-      { error: 'Failed to initiate evaluation' }, 
+      { error: `Failed to initiate evaluation: ${error.message}` }, 
       { status: 500 }
     );
   }
