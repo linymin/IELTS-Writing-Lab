@@ -66,6 +66,9 @@ chown nextjs:nodejs .next
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Patch Next.js standalone server to increase timeouts (fixes 60s ECONNRESET)
+RUN sed -i 's/const server = http.createServer(handler)/const server = http.createServer(handler); server.keepAliveTimeout = 120 * 1000; server.headersTimeout = 120 * 1000;/' server.js
+
 USER nextjs
 
 EXPOSE 3000
