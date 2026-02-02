@@ -7,7 +7,7 @@ import { createClient } from '@supabase/supabase-js';
 import { getSystemPrompt, IELTS_TASK1_RUBRIC_MD, IELTS_TASK2_RUBRIC_MD } from '@/lib/prompts/ielts-rubric';
 import { getEvaluationSchema } from '@/lib/schemas/evaluation';
 
-export const runtime = 'edge'; // Use Edge Runtime for better streaming support
+export const runtime = 'nodejs'; // Use Node.js Runtime for better stability in Docker
 export const maxDuration = 300; // Allow up to 5 minutes for AI processing
 
 // CORS headers for all responses
