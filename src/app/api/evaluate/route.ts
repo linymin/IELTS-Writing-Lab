@@ -223,13 +223,68 @@ ${body.essay_body}
       }
     });
 
-    const response = result.toTextStreamResponse();
-    // Add CORS headers to the stream response
+    const coreResponse = result.toTextStreamResponse();
+    
+    // Create a custom stream to inject whitespace heartbeats
+    // This prevents cloud gateways (like Tencent Cloud) from closing the connection due to idle timeout
+    // during the "thinking" phase of the LLM (which can take 40-60s).
+    const customStream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        
+        // 1. Send initial keep-alive byte immediately
+        controller.enqueue(encoder.encode(' '));
+        
+        // 2. Setup periodic keep-alive (every 15s)
+        const keepAliveInterval = setInterval(() => {
+          try {
+             // Enqueue a space to reset the idle timer
+             controller.enqueue(encoder.encode(' '));
+          } catch (e) {
+             clearInterval(keepAliveInterval);
+          }
+        }, 15000);
+
+        const reader = coreResponse.body?.getReader();
+        
+        if (!reader) {
+           clearInterval(keepAliveInterval);
+           controller.close();
+           return;
+        }
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            
+            // As soon as we get the first real chunk from the LLM, stop the heartbeat
+            if (!done) {
+                 clearInterval(keepAliveInterval);
+            }
+            
+            if (done) break;
+            controller.enqueue(value);
+          }
+          controller.close();
+        } catch (err) {
+          clearInterval(keepAliveInterval);
+          controller.error(err);
+        }
+      }
+    });
+
+    // Create new headers based on the original response
+    const newHeaders = new Headers(coreResponse.headers);
+    // Ensure CORS headers are present
     Object.entries(corsHeaders).forEach(([key, value]) => {
-      response.headers.set(key, value);
+      newHeaders.set(key, value);
     });
     
-    return response;
+    return new NextResponse(customStream, {
+       status: coreResponse.status,
+       statusText: coreResponse.statusText,
+       headers: newHeaders
+    });
 
   } catch (error: any) {
     console.error('Evaluation error:', error);
