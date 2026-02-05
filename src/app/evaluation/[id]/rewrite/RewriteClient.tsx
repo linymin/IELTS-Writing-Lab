@@ -8,6 +8,7 @@ import { Save, Send, Loader2, ArrowLeft, Maximize2, Minimize2, Lightbulb } from 
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { useEvaluation } from '@/lib/context/evaluation-context';
 
 interface RewriteClientProps {
   originalEssayBody: string;
@@ -25,8 +26,8 @@ export default function RewriteClient({
   evaluationId
 }: RewriteClientProps) {
   const router = useRouter();
+  const { startEvaluation, isEvaluating } = useEvaluation();
   const [essayContent, setEssayContent] = useState(originalEssayBody);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
 
   const wordCount = essayContent.trim().split(/\s+/).filter(w => w.length > 0).length;
@@ -54,13 +55,17 @@ export default function RewriteClient({
   };
 
   const handleSubmit = async () => {
+    if (isEvaluating) {
+        alert("An evaluation is currently in progress. Please wait.");
+        return;
+    }
+
     if (!essayContent.trim()) return;
     if (essayContent.length < 50) {
       alert("Essay is too short (minimum 50 characters).");
       return;
     }
 
-    setIsSubmitting(true);
     try {
       // 1. Check Auth first
       const { data: { session } } = await supabase.auth.getSession();
@@ -68,24 +73,16 @@ export default function RewriteClient({
         throw new Error("You must be logged in to submit a rewrite.");
       }
 
-      // 2. Prepare Payload
-      const payload = {
+      // 2. Call global evaluation
+      await startEvaluation({
         essay_body: essayContent,
         task_type: taskType,
         question_text: questionText,
-      };
-
-      // 3. Store in Session Storage with a unique key
-      const key = `eval_pending_${Date.now()}`;
-      sessionStorage.setItem(key, JSON.stringify(payload));
-
-      // 4. Redirect to Processing Page
-      router.push(`/evaluation/processing?key=${key}`);
+      }, evaluationId); // Pass parent ID to track active task
 
     } catch (error) {
       console.error("Submission error:", error);
       alert(error instanceof Error ? error.message : "Failed to submit for evaluation. Please try again.");
-      setIsSubmitting(false);
     }
   };
 
@@ -191,16 +188,17 @@ export default function RewriteClient({
                <button 
                  onClick={handleSaveDraft}
                  className="flex items-center gap-2 px-4 py-2 text-slate-600 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors text-sm font-medium shadow-sm"
-                 disabled={isSubmitting}
                >
                  <Save className="w-4 h-4" /> Save Draft
                </button>
                <button 
                  onClick={handleSubmit}
-                 disabled={isSubmitting}
-                 className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md text-sm font-medium disabled:opacity-70 disabled:cursor-not-allowed"
+                 className={cn(
+                   "flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg transition-colors shadow-md text-sm font-medium transform",
+                   isEvaluating ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-700 hover:scale-105 active:scale-95"
+                 )}
                >
-                 {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                 <Send className="w-4 h-4" />
                  Submit
                </button>
             </div>

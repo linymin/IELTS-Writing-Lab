@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import EvaluationReport from '@/components/EvaluationReport';
+import EvaluationCleanup from '@/components/EvaluationCleanup';
 import { formatEvaluation } from '@/lib/score-adapter';
 import { notFound, redirect } from 'next/navigation';
 
@@ -92,6 +93,7 @@ export default async function EvaluationPage({ params }: { params: Promise<{ id:
   
   return (
     <div>
+      <EvaluationCleanup evaluationId={id} />
       <EvaluationReport 
         result={report} 
         essay={essayData.essay_body} 

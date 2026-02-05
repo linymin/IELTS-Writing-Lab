@@ -1,11 +1,12 @@
 'use client';
 
-import { TrendingUp, ArrowRight, Target, RefreshCw, BarChart3 } from 'lucide-react';
+import { TrendingUp, ArrowRight, Target, RefreshCw, BarChart3, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { useEvaluation } from '@/lib/context/evaluation-context';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -39,6 +40,7 @@ interface AverageScores {
 
 export default function ImprovementPage() {
   const supabase = createClient();
+  const { isEvaluating, activeEvaluationId } = useEvaluation();
   const [targetScore, setTargetScore] = useState<number>(7.0);
   const [essaysToImprove, setEssaysToImprove] = useState<EssayRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -273,13 +275,31 @@ export default function ImprovementPage() {
 
                 {/* Footer / Action */}
                 <div className="mt-auto">
-                  <Link 
-                    href={`/evaluation/${essay.id}/rewrite`} 
-                    className="w-full flex items-center justify-center gap-2 bg-white border border-slate-200 hover:border-blue-500 hover:text-blue-600 text-slate-700 font-medium py-2 rounded-lg transition-all group"
-                  >
-                    Start Rewrite
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </Link>
+                   {isEvaluating && activeEvaluationId === essay.id ? (
+                      <button 
+                        disabled
+                        className="w-full flex items-center justify-center gap-2 bg-blue-50 border border-blue-100 text-blue-600 font-medium py-2 rounded-lg cursor-not-allowed"
+                      >
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Evaluating...
+                      </button>
+                   ) : (
+                      <Link 
+                        href={`/evaluation/${essay.id}/rewrite`} 
+                        className={cn(
+                          "w-full flex items-center justify-center gap-2 bg-white border border-slate-200 hover:border-blue-500 hover:text-blue-600 text-slate-700 font-medium py-2 rounded-lg transition-all group",
+                          // isEvaluating && "opacity-50 cursor-not-allowed pointer-events-none" // REMOVED: Allow clicking to see logic below or just navigation? 
+                          // User requested: "start rewrite to be clickable normally" -> Wait, user said "start rewrite to be clickable normally" on non-active cards?
+                          // Requirement: "improvement的页面，没有评估的题目卡片，start rewrite要能正常点击"
+                          // If they click it, they go to the rewrite page. Can they submit there? No, the rewrite page will block submission.
+                          // So we should allow navigation.
+                        )}
+                        // REMOVED: The onClick interception. Let them navigate. The Rewrite page will handle the "Waiting" state on submit.
+                      >
+                        Start Rewrite
+                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      </Link>
+                   )}
                 </div>
               </div>
             ))}

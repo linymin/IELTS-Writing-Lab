@@ -13,10 +13,15 @@ import {
   ChevronLeft,
   ChevronRight,
   PenTool,
-  LogOut
+  LogOut,
+  Loader2,
+  CheckCircle,
+  Play,
+  X
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { useEvaluation } from '@/lib/context/evaluation-context';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -74,6 +79,26 @@ import { UserAvatar } from './UserAvatar';
 
 export const Sidebar = ({ isCollapsed, toggleSidebar }: SidebarProps) => {
   const { t } = useLanguage();
+  const { isEvaluating, progress, isComplete, currentStage, elapsedSeconds, cancelEvaluation } = useEvaluation();
+  const pathname = usePathname();
+  
+  // Show progress if evaluating OR complete
+  // Hide if on evaluating page OR report page
+  // Hide if just started (elapsedSeconds < 1) to prevent flash during initial redirect
+  // EXCEPTION: If we are in the rewrite flow (activeEvaluationId exists), we might be on a "rewrite" page, 
+  // but we still want to hide the sidebar progress if we are technically on the /evaluating page.
+  // The issue: "Run in Background" from rewrite -> evaluating page -> click -> stays on evaluating page?
+  // No, the issue is: From rewrite page, we submit -> go to /evaluating. 
+  // If we click "Back" or "Minimize", we are now on the previous page (RewriteClient).
+  // RewriteClient IS the page where we want to see the progress bar!
+  // BUT the check `!pathname.startsWith('/evaluation/')` hides it because RewriteClient is at `/evaluation/[id]/rewrite`!
+  
+  const isRewritePage = pathname.includes('/rewrite');
+
+  const showProgress = (isEvaluating || isComplete) 
+    && pathname !== '/evaluating' 
+    && (!pathname.startsWith('/evaluation/') || isRewritePage) // Allow showing on rewrite pages
+    && elapsedSeconds > 0;
 
   return (
     <div 
@@ -156,6 +181,76 @@ export const Sidebar = ({ isCollapsed, toggleSidebar }: SidebarProps) => {
             )}
         </button>
       </nav>
+
+      {/* Progress Indicator (Above Profile) */}
+      {showProgress && (
+         <div className="px-3 pb-4 relative">
+            {/* Cancel Button (Visible only when not collapsed and not complete) */}
+            {!isCollapsed && !isComplete && (
+               <button 
+                  onClick={(e) => {
+                     e.preventDefault();
+                     e.stopPropagation();
+                     cancelEvaluation();
+                  }}
+                  className="absolute -top-1 -right-1 z-20 bg-slate-700 text-slate-400 hover:text-white hover:bg-red-500 rounded-full p-1 shadow-md transition-colors transform scale-75 hover:scale-100"
+                  title="Cancel Evaluation"
+               >
+                  <X className="w-3 h-3" />
+               </button>
+            )}
+
+            <Link href={isComplete && useEvaluation().evaluationId ? `/evaluation/${useEvaluation().evaluationId}` : "/evaluating"}>
+              <div className={cn(
+                "rounded-xl bg-slate-800 border border-slate-700 overflow-hidden cursor-pointer hover:bg-slate-750 transition-colors group relative",
+                isCollapsed ? "p-2 flex justify-center" : "p-3"
+              )}>
+                
+                {isCollapsed ? (
+                   // Collapsed State: Circular Progress
+                   <div className="relative w-8 h-8 flex items-center justify-center">
+                      <svg className="w-full h-full transform -rotate-90">
+                         <circle cx="16" cy="16" r="14" stroke="currentColor" strokeWidth="3" fill="transparent" className="text-slate-700" />
+                         <circle 
+                           cx="16" cy="16" r="14" stroke="currentColor" strokeWidth="3" fill="transparent" 
+                           strokeDasharray={2 * Math.PI * 14}
+                           strokeDashoffset={2 * Math.PI * 14 * (1 - progress / 100)}
+                           className={isComplete ? "text-green-500" : "text-blue-500"}
+                         />
+                      </svg>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                         {isComplete ? <CheckCircle className="w-3 h-3 text-green-500" /> : <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />}
+                      </div>
+                   </div>
+                ) : (
+                   // Expanded State: Detailed Status
+                   <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs font-medium">
+                         <span className={isComplete ? "text-green-400" : "text-blue-400"}>
+                            {isComplete ? "Complete!" : "Analyzing..."}
+                         </span>
+                         <span className="text-slate-400">{Math.round(progress)}%</span>
+                      </div>
+                      
+                      <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                         <div 
+                           className={cn("h-full transition-all duration-500 ease-out", isComplete ? "bg-green-500" : "bg-blue-500")}
+                           style={{ width: `${progress}%` }}
+                         />
+                      </div>
+                      
+                      {isComplete && (
+                        <div className="flex items-center gap-1 text-[10px] text-green-400/80 mt-1">
+                           <Play className="w-3 h-3 fill-current" />
+                           <span>Click to view report</span>
+                        </div>
+                      )}
+                   </div>
+                )}
+              </div>
+            </Link>
+         </div>
+      )}
 
       {/* User Profile */}
       <div className={cn(

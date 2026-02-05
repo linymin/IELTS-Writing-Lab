@@ -3,34 +3,17 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { experimental_useObject as useObject } from '@ai-sdk/react'; // Use experimental_useObject from @ai-sdk/react
-import { useEvaluationPoller } from '@/hooks/useEvaluationPoller'; // Use the shared hook
+import { useEvaluation } from '@/lib/context/evaluation-context';
 import { 
-  ArrowRight, 
-  RefreshCw,
-  AlertTriangle,
   Timer,
-  Layout,
   Pause,
   LogOut,
-  ChevronDown
+  ChevronDown,
+  AlertTriangle
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { MOCK_QUESTIONS } from '@/lib/mock-questions';
-import { getEvaluationSchema } from '@/lib/schemas/evaluation'; // We might not need this on client if we just trust the stream
-import { z } from 'zod';
-
-// Define a client-side schema for the UI feedback
-const feedbackSchema = z.object({
-  overallScore: z.number().optional(),
-  dimensions: z.object({
-    taskResponse: z.object({ score: z.number().optional() }).optional(),
-    coherenceCohesion: z.object({ score: z.number().optional() }).optional(),
-    lexicalResource: z.object({ score: z.number().optional() }).optional(),
-    grammaticalRangeAccuracy: z.object({ score: z.number().optional() }).optional(),
-  }).optional(),
-}).passthrough();
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -40,7 +23,8 @@ function WorkshopContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
-  const { pollForEvaluationId } = useEvaluationPoller();
+  const { startEvaluation, isEvaluating } = useEvaluation();
+  
   const qid = searchParams.get('qid'); // Legacy mock support
   const question_id = searchParams.get('question_id'); // Supabase support
 
@@ -50,56 +34,10 @@ function WorkshopContent() {
   const [taskType, setTaskType] = useState<'task1' | 'task2'>('task2');
   const [isLoadingQuestion, setIsLoadingQuestion] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isRedirecting, setIsRedirecting] = useState(false);
   
   // Timer State
   const [timeLeft, setTimeLeft] = useState(2400); // Default to Task 2 (40 mins)
   const [isTimerRunning, setIsTimerRunning] = useState(false);
-
-  // Streaming Object Hook
-  const { object: streamingResult, submit, isLoading, error: streamError } = useObject({
-    api: '/api/evaluate',
-    schema: feedbackSchema,
-    // Use custom fetch to ensure Authorization header is always fresh
-    fetch: async (url, options) => {
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
-        
-        if (!token) {
-            throw new Error("User session not found. Please log in.");
-        }
-
-        const headers = new Headers(options?.headers);
-        headers.set('Authorization', `Bearer ${token}`);
-        
-        return fetch(url, {
-            ...options,
-            headers,
-        });
-    },
-    onFinish: async ({ object, error }: { object?: any, error?: Error }) => {
-       if (error) {
-         setError("Evaluation failed: " + error.message);
-         return;
-       }
-       
-       setIsRedirecting(true);
-
-       // Poll for the saved ID in Supabase using shared hook
-       try {
-           const { data: { user } } = await supabase.auth.getUser();
-           if (!user) throw new Error("User not authenticated");
-           
-           const evalId = await pollForEvaluationId(user.id);
-           if (evalId) {
-               router.push(`/evaluation/${evalId}`);
-           }
-       } catch (err) {
-           setError(err instanceof Error ? err.message : "Failed to retrieve evaluation.");
-           setIsRedirecting(false);
-       }
-    }
-  });
 
   // Check Configuration
   useEffect(() => {
@@ -180,6 +118,12 @@ function WorkshopContent() {
   };
 
   const handleEvaluate = async () => {
+    // 0. Check global evaluation state
+    if (isEvaluating) {
+        alert("An evaluation is currently in progress. Please wait for it to complete.");
+        return;
+    }
+
     // 1. Validate Essay Length
     if (!essay.trim() || essay.length < 50) {
       setError("Essay is too short. Please write at least 50 characters.");
@@ -194,79 +138,14 @@ function WorkshopContent() {
 
     setError(null);
 
-    // Call streaming submit
-    submit({
+    // Call streaming submit via Global Context
+    await startEvaluation({
       essay_body: essay,
       task_type: taskType,
       question_text: topic,
       question_id: question_id || null
     });
   };
-
-  // Safe access to streaming data
-  // @ts-ignore - The object shape is inferred loosely but we know it matches the schema
-  const currentResult = streamingResult as any;
-
-  if (isLoading || isRedirecting) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center max-w-lg w-full">
-           <div className="w-20 h-20 bg-blue-100 rounded-full mx-auto mb-6 flex items-center justify-center">
-             <RefreshCw className="w-10 h-10 text-blue-600 animate-spin" />
-           </div>
-           <h2 className="text-2xl font-bold text-slate-900 mb-2">Analyzing your essay...</h2>
-           
-           {/* Real-time Streaming Feedback */}
-           {currentResult ? (
-             <div className="text-left mt-6 space-y-3 bg-slate-50 p-4 rounded-lg border border-slate-100">
-               {/* Show dimensions as they appear */}
-               <div className="space-y-1 text-sm text-slate-500">
-                 <div className="flex justify-between">
-                   <span>Task Response:</span>
-                   <span className={currentResult.dimensions?.taskResponse?.score ? "text-green-600 font-bold" : "text-slate-300"}>
-                     {currentResult.dimensions?.taskResponse?.score || 'Pending...'}
-                   </span>
-                 </div>
-                 <div className="flex justify-between">
-                   <span>Coherence & Cohesion:</span>
-                   <span className={currentResult.dimensions?.coherenceCohesion?.score ? "text-green-600 font-bold" : "text-slate-300"}>
-                     {currentResult.dimensions?.coherenceCohesion?.score || 'Pending...'}
-                   </span>
-                 </div>
-                 <div className="flex justify-between">
-                   <span>Lexical Resource:</span>
-                   <span className={currentResult.dimensions?.lexicalResource?.score ? "text-green-600 font-bold" : "text-slate-300"}>
-                     {currentResult.dimensions?.lexicalResource?.score || 'Pending...'}
-                   </span>
-                 </div>
-                 <div className="flex justify-between">
-                   <span>Grammar:</span>
-                   <span className={currentResult.dimensions?.grammaticalRangeAccuracy?.score ? "text-green-600 font-bold" : "text-slate-300"}>
-                     {currentResult.dimensions?.grammaticalRangeAccuracy?.score || 'Pending...'}
-                   </span>
-                 </div>
-               </div>
-
-               {/* Overall Score at the bottom */}
-               <div className="flex justify-between items-center pt-2 border-t border-slate-200 mt-2">
-                 <span className="text-slate-900 font-medium">Overall Score:</span>
-                 <span className={cn(
-                    "font-bold text-lg", 
-                    currentResult.overallScore ? "text-blue-600" : "text-slate-400 text-sm font-normal"
-                 )}>
-                   {currentResult.overallScore ? currentResult.overallScore : 'Calculating...'}
-                 </span>
-               </div>
-             </div>
-           ) : (
-             <p className="text-slate-500 mb-8">Connecting to AI examiner...</p>
-           )}
-
-           <p className="text-xs text-slate-400 mt-6">This may take up to 30 seconds.</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col h-screen bg-slate-100 overflow-hidden font-sans">
@@ -326,7 +205,10 @@ function WorkshopContent() {
           
           <button 
             onClick={handleEvaluate}
-            className="bg-slate-100 hover:bg-white text-slate-900 px-6 py-2 rounded shadow-sm font-bold text-sm transition-all flex items-center gap-2"
+            className={cn(
+              "bg-slate-100 hover:bg-white text-slate-900 px-6 py-2 rounded shadow-sm font-bold text-sm transition-all flex items-center gap-2",
+              isEvaluating && "opacity-50 cursor-not-allowed"
+            )}
           >
             Submit
           </button>
