@@ -179,7 +179,33 @@ export async function POST(request: NextRequest) {
     // 3. Prepare Prompt
     const selectedRubric = body.task_type === 'task1' ? IELTS_TASK1_RUBRIC_MD : IELTS_TASK2_RUBRIC_MD;
     const baseSystemPrompt = getSystemPrompt(body.task_type);
-    const finalSystemPrompt = `${baseSystemPrompt}\n\n[Specific Rubric for ${body.task_type.toUpperCase()}]\n${selectedRubric}`;
+
+    // Language Injection
+    let userLangName = "English";
+    let languageInstruction = "";
+    
+    if (body.language === 'zh') {
+      userLangName = "Simplified Chinese (简体中文)";
+      languageInstruction = `
+### IMPORTANT: LANGUAGE REQUIREMENT (CRITICAL) ###
+1. **ALL** feedback, explanations, reasons, critiques, and suggestions MUST be written in **Simplified Chinese (简体中文)**.
+2. DO NOT use English for explanations. Even if the rubric below is in English, your output MUST be in Chinese.
+3. Keep IELTS technical terms (e.g., "Task Response", "Cohesion") in English, but explain them in Chinese.
+4. This is a mandatory requirement for the JSON String fields.
+################################################
+`;
+    }
+
+    const finalSystemPrompt = `${languageInstruction}
+You are a professional IELTS grader. You MUST provide all feedback and explanations in ${userLangName}.
+
+${baseSystemPrompt}
+
+[Specific Rubric for ${body.task_type.toUpperCase()}]
+${selectedRubric}
+
+${languageInstruction} (Final Reminder: OUTPUT IN ${userLangName} ONLY)`;
+
 
     const userPrompt = `
 Task Type: ${body.task_type}

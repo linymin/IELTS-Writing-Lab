@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useEvaluation } from '@/lib/context/evaluation-context';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { 
   Timer,
   Pause,
@@ -24,9 +25,12 @@ function WorkshopContent() {
   const searchParams = useSearchParams();
   const supabase = createClient();
   const { startEvaluation, isEvaluating } = useEvaluation();
+  const { language } = useLanguage();
   
   const qid = searchParams.get('qid'); // Legacy mock support
   const question_id = searchParams.get('question_id'); // Supabase support
+  const initialTopic = searchParams.get('topic'); // Custom topic support
+  const initialTaskType = searchParams.get('taskType'); // Custom task type support
 
   const [topic, setTopic] = useState('');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -46,7 +50,7 @@ function WorkshopContent() {
     }
   }, []);
 
-  // Load Question from ID (Mock or Supabase)
+  // Load Question from ID (Mock or Supabase) or Initial Params
   useEffect(() => {
     const fetchQuestion = async () => {
       if (question_id) {
@@ -82,6 +86,12 @@ function WorkshopContent() {
           setTopic(question.content);
           setTaskType(question.task_type === 1 ? 'task1' : 'task2');
         }
+      } else if (initialTopic) {
+        // Handle custom topic passed via URL
+        setTopic(decodeURIComponent(initialTopic));
+        if (initialTaskType) {
+          setTaskType(initialTaskType === 'task1' ? 'task1' : 'task2');
+        }
       } else {
         // Reset state if no ID provided
         setTopic('');
@@ -90,7 +100,7 @@ function WorkshopContent() {
     };
 
     fetchQuestion();
-  }, [qid, question_id]);
+  }, [qid, question_id, initialTopic, initialTaskType]);
 
   // Timer Logic
   useEffect(() => {
@@ -138,12 +148,59 @@ function WorkshopContent() {
 
     setError(null);
 
+    let finalQuestionId = question_id;
+
+    // 3. Handle Custom Question Persistence
+    // If no existing question_id, this is a custom topic. We must save/retrieve it.
+    if (!finalQuestionId) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user) {
+          // Check if question exists for this user to avoid duplicates
+          // We use 'content' + 'user_id' as the unique key for custom questions
+          const { data: existingQ } = await supabase
+            .from('questions')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('content', topic)
+            .maybeSingle();
+
+          if (existingQ) {
+            finalQuestionId = existingQ.id;
+          } else {
+            // Create new custom question
+            const { data: newQ, error: insertError } = await supabase
+              .from('questions')
+              .insert({
+                user_id: user.id,
+                content: topic,
+                topic: 'Custom Topic', // Default category
+                question_type: 'Custom',
+                task_type: taskType === 'task1' ? 1 : 2,
+                // book_no, test_no are null by default
+              })
+              .select('id')
+              .single();
+
+            if (insertError) throw insertError;
+            if (newQ) finalQuestionId = newQ.id;
+          }
+        }
+      } catch (err) {
+        console.error('Error ensuring custom question exists:', err);
+        setError("Failed to save custom topic. Please check your connection.");
+        return;
+      }
+    }
+
     // Call streaming submit via Global Context
     await startEvaluation({
       essay_body: essay,
       task_type: taskType,
       question_text: topic,
-      question_id: question_id || null
+      question_id: finalQuestionId || null,
+      language: language || 'en' // Pass current language preference
     });
   };
 

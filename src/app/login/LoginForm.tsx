@@ -18,7 +18,7 @@ export default function LoginForm() {
       if (result?.error) {
         setError(result.error)
       } else if (result?.success) {
-        router.push('/workshop')
+        router.push('/questions')
         router.refresh()
       } else if (result?.message) {
         setMessage(result.message)

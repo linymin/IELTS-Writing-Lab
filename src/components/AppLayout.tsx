@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { cn } from '@/lib/utils';
 import { LanguageProvider } from '@/lib/i18n/LanguageContext';
-import { UserAvatar } from './UserAvatar';
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [isCollapsed, setIsCollapsed] = useState(false);

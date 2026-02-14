@@ -150,36 +150,10 @@ export const Sidebar = ({ isCollapsed, toggleSidebar }: SidebarProps) => {
 
       {/* Navigation Items */}
       <nav className="flex-1 space-y-2 px-3">
-        <NavItem isCollapsed={isCollapsed} href="/workshop" icon={<PenTool className="w-6 h-6" />} label={t('sidebar.workshop')} />
         <NavItem isCollapsed={isCollapsed} href="/questions" icon={<HelpCircle className="w-6 h-6" />} label={t('sidebar.questions')} />
-        <NavItem isCollapsed={isCollapsed} href="/improvement" icon={<TrendingUp className="w-6 h-6" />} label={t('sidebar.improvement')} />
+        <NavItem isCollapsed={isCollapsed} href="/diagnostics" icon={<BarChart2 className="w-6 h-6" />} label={t('sidebar.diagnostics')} />
         <NavItem isCollapsed={isCollapsed} href="/history" icon={<History className="w-6 h-6" />} label={t('sidebar.history')} />
         <NavItem isCollapsed={isCollapsed} href="/settings" icon={<Settings className="w-6 h-6" />} label={t('sidebar.settings')} />
-        
-        <button
-            onClick={() => signout()}
-            className={cn(
-            "w-full flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer transition-colors relative group text-slate-400 hover:bg-slate-800 hover:text-white",
-            isCollapsed && "justify-center px-2"
-            )}
-            title={isCollapsed ? t('sidebar.signout') : undefined}
-        >
-            <div className="shrink-0">
-            <LogOut className="w-6 h-6" />
-            </div>
-            {!isCollapsed && (
-            <span className="whitespace-nowrap overflow-hidden transition-all duration-300">
-                {t('sidebar.signout')}
-            </span>
-            )}
-            
-            {/* Tooltip for collapsed state */}
-            {isCollapsed && (
-            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 bg-slate-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
-                {t('sidebar.signout')}
-            </div>
-            )}
-        </button>
       </nav>
 
       {/* Progress Indicator (Above Profile) */}
@@ -253,18 +227,20 @@ export const Sidebar = ({ isCollapsed, toggleSidebar }: SidebarProps) => {
       )}
 
       {/* User Profile */}
-      <div className={cn(
-        "p-4 border-t border-slate-800 flex items-center gap-3 mt-auto",
-        isCollapsed ? "justify-center" : ""
-      )}>
-        <UserAvatar />
-        {!isCollapsed && (
-          <div className="flex flex-col overflow-hidden">
-             <span className="text-sm font-medium text-white truncate">My Profile</span>
-             <span className="text-xs text-slate-500 truncate">Manage Account</span>
-          </div>
-        )}
-      </div>
+      <Link href="/profile">
+        <div className={cn(
+          "p-4 border-t border-slate-800 flex items-center gap-3 mt-auto hover:bg-slate-800 transition-colors cursor-pointer",
+          isCollapsed ? "justify-center" : ""
+        )}>
+          <UserAvatar />
+          {!isCollapsed && (
+            <div className="flex flex-col overflow-hidden">
+               <span className="text-sm font-medium text-white truncate">My Profile</span>
+               <span className="text-xs text-slate-500 truncate">Manage Account</span>
+            </div>
+          )}
+        </div>
+      </Link>
 
       {/* Footer / Version */}
       <div className={cn(

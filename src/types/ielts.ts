@@ -25,6 +25,7 @@ export interface ScoreRequest {
   task_type: 'task1' | 'task2';
   question_text: string;
   question_id?: string;
+  language?: 'en' | 'zh';
   user_history?: {
     essay_id: string;
     overall_band: number;

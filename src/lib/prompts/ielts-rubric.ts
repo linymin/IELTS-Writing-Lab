@@ -46,14 +46,14 @@ export function getSystemPrompt(taskType: string = 'task2'): string {
    - Example Relevance (例子相关性/TA: 格式恰当性)`;
 
   const trJson = isTask1
-    ? `"overviewClarity": { "score": number, "reason": "..." },
-        "keyFeaturesSelection": { "score": number, "reason": "..." },
-        "dataAccuracySupport": { "score": number, "reason": "..." },
-        "coverage": { "score": number, "reason": "..." }`
-    : `"responseToPrompt": { "score": number, "reason": "Specific feedback..." },
-        "positionClarity": { "score": number, "reason": "..." },
-        "ideaDevelopment": { "score": number, "reason": "..." },
-        "exampleRelevance": { "score": number, "reason": "..." }`;
+    ? `"overviewClarity": { "score": number, "reason": "Feedback in requested language" },
+        "keyFeaturesSelection": { "score": number, "reason": "Feedback in requested language" },
+        "dataAccuracySupport": { "score": number, "reason": "Feedback in requested language" },
+        "coverage": { "score": number, "reason": "Feedback in requested language" }`
+    : `"responseToPrompt": { "score": number, "reason": "Feedback in requested language" },
+        "positionClarity": { "score": number, "reason": "Feedback in requested language" },
+        "ideaDevelopment": { "score": number, "reason": "Feedback in requested language" },
+        "exampleRelevance": { "score": number, "reason": "Feedback in requested language" }`;
 
   const lrSection = isTask1
     ? `3. Lexical Resource (LR):

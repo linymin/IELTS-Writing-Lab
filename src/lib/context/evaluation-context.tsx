@@ -62,7 +62,7 @@ export function EvaluationProvider({ children }: { children: React.ReactNode }) 
 
   // Initialize audio
   useEffect(() => {
-    audioRef.current = new Audio('/sounds/complete.mp3'); // We'll need to add this file or use a placeholder
+    // audioRef.current = new Audio('/sounds/complete.mp3'); // We'll need to add this file or use a placeholder
   }, []);
 
   const playCompletionSound = () => {
@@ -160,7 +160,10 @@ export function EvaluationProvider({ children }: { children: React.ReactNode }) 
     setStartTime(Date.now());
     
     // Start the stream
-    submit(payload);
+      submit({
+        ...payload,
+        language: payload.language // Ensure language is passed
+      });
     
     // Redirect to evaluating page immediately
     router.push('/evaluating');

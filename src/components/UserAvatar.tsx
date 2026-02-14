@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import { User as UserIcon } from 'lucide-react'
@@ -24,10 +23,8 @@ export function UserAvatar() {
   const initial = user.email ? user.email[0].toUpperCase() : 'U'
 
   return (
-    <Link href="/profile" className="block">
-      <div className="h-10 w-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-semibold hover:bg-indigo-700 transition-colors shadow-md ring-2 ring-white cursor-pointer" title={user.email}>
-        {initial}
-      </div>
-    </Link>
+    <div className="h-10 w-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-semibold hover:bg-indigo-700 transition-colors shadow-md ring-2 ring-white cursor-pointer" title={user.email}>
+      {initial}
+    </div>
   )
 }

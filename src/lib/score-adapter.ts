@@ -1,167 +1,191 @@
-import { IELTSReport, DimensionEvaluation, ParagraphRewrite, HighScoreToolkit, SubItemEvaluation, CorrectedSentence } from '@/types/evaluation';
+export interface IELTSDimension {
+  score: number;
+  explanation: string;
+  subScores: Record<string, number>;
+}
 
-// Re-export types for backward compatibility with consumers like page.tsx
-export type { IELTSReport, DimensionEvaluation, ParagraphRewrite, HighScoreToolkit, SubItemEvaluation, CorrectedSentence };
+export interface SubItemEvaluation {
+  score: number;
+  reason: string;
+}
 
-export function formatEvaluation(raw: any, essayBody?: string, taskType: 'task1' | 'task2' = 'task2'): IELTSReport {
+export interface CorrectedSentence {
+  original: string;
+  correction: string;
+  explanation: string;
+}
+
+export interface ParagraphRewrite {
+  critique: string;
+  rewrite?: string;
+}
+
+export interface VocabularyItem {
+  word: string;
+  definition: string;
+  context?: string;
+}
+
+export interface GrammarItem {
+  type: string;
+  example: string;
+  explanation: string;
+}
+
+export interface CohesionItem {
+  type: string;
+  suggestion: string;
+  example: string;
+}
+
+export interface Toolkit {
+  essayOutline: string;
+  vocabulary: VocabularyItem[];
+  grammar: GrammarItem[];
+  cohesion?: CohesionItem[];
+}
+
+export interface IELTSReport {
+  topic: string;
+  overallScore: number;
+  estimatedWordBand?: string;
+  taskType?: 'task1' | 'task2';
+  dimensions: {
+    taskResponse: {
+      score: number;
+      reason: string;
+      subItems: Record<string, SubItemEvaluation>;
+    };
+    coherenceCohesion: {
+      score: number;
+      reason: string;
+      subItems: Record<string, SubItemEvaluation>;
+    };
+    lexicalResource: {
+      score: number;
+      reason: string;
+      subItems: Record<string, SubItemEvaluation>;
+    };
+    grammaticalRangeAccuracy: {
+      score: number;
+      reason: string;
+      subItems: Record<string, SubItemEvaluation>;
+    };
+  };
+  correctedSentences: CorrectedSentence[];
+  paragraphRewrites: ParagraphRewrite[];
+  toolkit: Toolkit;
+  referenceEssay: string;
+}
+
+export function safeTransform(raw: any): IELTSReport {
   const safeObj = (val: any) => (typeof val === 'object' && val !== null ? val : {});
   const safeNum = (val: any, fallback = 0) => (typeof val === 'number' && !isNaN(val) ? val : fallback);
   const safeStr = (val: any, fallback = '') => (typeof val === 'string' ? val : fallback);
-  
-  const data = safeObj(raw);
-
-  // Split essay into paragraphs if provided
-  const paragraphs = essayBody ? essayBody.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean) : [];
-
-  const getSubItem = (item: any): SubItemEvaluation => ({
-    score: safeNum(item?.score, 0),
-    reason: safeStr(item?.reason, '暂无评价')
-  });
-
-  const expectedSubItems: Record<string, string[]> = {
-    taskResponse: taskType === 'task1' 
-      ? ['overviewClarity', 'keyFeaturesSelection', 'dataAccuracySupport', 'coverage']
-      : ['responseToPrompt', 'positionClarity', 'ideaDevelopment', 'exampleRelevance'],
-    coherenceCohesion: ['logicalOrganization', 'introConclusionEffectiveness', 'cohesiveDevices', 'mainIdeaSupport'],
-    lexicalResource: ['vocabularyRange', 'accuracy', 'spellingFormation', 'collocationIdiomaticity'],
-    grammaticalRangeAccuracy: ['sentenceVariety', 'grammarAccuracy', 'punctuation', 'controlComplexity']
+  const safeArr = <T>(val: any, transform: (item: any) => T): T[] => {
+    return Array.isArray(val) ? val.map(transform) : [];
   };
 
-  const getDimension = (dimData: any, dimKey: string, fallbackScore: number): DimensionEvaluation => {
-    const safeDim = safeObj(dimData);
-    const dimScore = safeNum(safeDim.score ?? safeDim.band, fallbackScore);
-    
-    // Normalize subItems keys
-    const subItemsRaw = safeObj(safeDim.subItems || safeDim.sub_scores);
-    
-    const subItems: Record<string, SubItemEvaluation> = {};
-    const requiredKeys = expectedSubItems[dimKey] || [];
+  const data = safeObj(raw);
 
-    requiredKeys.forEach(key => {
-      // Try to find the key (case-insensitive or direct match)
-      // The prompt asks for camelCase, but we should be robust
-      let foundData = subItemsRaw[key];
-      
-      // If not found, try to find snake_case or other variations if needed, 
-      // but for now let's rely on the fallback logic if missing.
-      
-      // Default Value Interceptor Logic:
-      // 1. If we have specific data, use it.
-      // 2. If score is 0 or missing, fallback to the Dimension Score.
-      // 3. If Dimension Score is 0 (unlikely with our fallbackScore passed in), fallback to 5.0.
-      
-      const rawScore = safeNum(foundData?.score, 0);
-      const finalScore = rawScore > 0 ? rawScore : (dimScore > 0 ? dimScore : 5.0);
-      
-      subItems[key] = {
-        score: finalScore,
-        reason: safeStr(foundData?.reason, safeDim.reason ?? 'Evaluated based on dimension performance.')
-      };
-    });
+  // Helper for dimension extraction
+  const getDimension = (keys: string[]) => {
+    let dimData: any = {};
+    for (const key of keys) {
+      if (data[key] || (data.dimensions && data.dimensions[key])) {
+        dimData = data[key] || data.dimensions[key];
+        break;
+      }
+    }
+    
+    // Normalize subItems/subScores
+    const rawSub = dimData.subItems ?? dimData.sub_scores ?? dimData.subScores ?? {};
+    const subItems: Record<string, SubItemEvaluation> = {};
+    
+    if (typeof rawSub === 'object') {
+      for (const [k, v] of Object.entries(rawSub)) {
+        if (typeof v === 'object' && v !== null) {
+           // @ts-ignore
+           subItems[k] = { score: safeNum(v.score), reason: safeStr(v.reason ?? v.explanation) };
+        } else if (typeof v === 'number') {
+           subItems[k] = { score: v, reason: '' };
+        }
+      }
+    }
 
     return {
-      score: dimScore,
-      reason: safeStr(safeDim.reason ?? safeDim.explanation, '暂无评价'),
-      subItems
+      score: safeNum(dimData.score ?? dimData.band, 0),
+      reason: safeStr(dimData.explanation ?? dimData.reason ?? dimData.feedback, '暂无评价'),
+      subItems,
     };
   };
 
-  const getParagraphRewrites = (list: any): ParagraphRewrite[] => {
-    if (!Array.isArray(list)) return [];
-    return list.map((item: any) => ({
-      paragraphType: safeStr(item.paragraphType) as 'Introduction' | 'Body Paragraph' | 'Conclusion',
-      originalText: item.originalText ? safeStr(item.originalText) : undefined,
-      critique: safeStr(item.critique),
-      rewrite: safeStr(item.rewrite)
+  // Extract Corrected Sentences
+  const getCorrections = (): CorrectedSentence[] => {
+    const rawList = data.correctedSentences ?? data.sentence_corrections ?? data.corrections ?? [];
+    return safeArr(rawList, (item) => ({
+      original: safeStr(item.original),
+      correction: safeStr(item.correction ?? item.revised),
+      explanation: safeStr(item.explanation ?? item.reason)
     }));
   };
 
-  const paragraphRewrites = getParagraphRewrites(data.paragraphRewrites);
-
-  const getCorrectedSentences = (list: any): CorrectedSentence[] => {
-    if (!Array.isArray(list)) return [];
-    return list.map((item: any) => {
-      const original = safeStr(item.original);
-      const sentence = {
-        original: original,
-        correction: safeStr(item.correction),
-        explanation: safeStr(item.explanation),
-        relatedParagraphCritique: undefined as string | undefined,
-        relatedParagraphRewrite: undefined as string | undefined
-      };
-
-      // Try to match sentence to a paragraph and attach feedback
-      if (paragraphs.length > 0 && paragraphRewrites.length > 0) {
-        // Find which paragraph contains this sentence
-        const paraIndex = paragraphs.findIndex(p => p.includes(original));
-        
-        if (paraIndex !== -1) {
-           // We found the paragraph index. 
-           // Now we need to map this index to the paragraphRewrites array.
-           // Assumption: The LLM returns rewrites in the same logical order (Intro -> Body 1 -> Body 2 -> Conclusion)
-           // If the number of paragraphs matches rewrites, we can map 1:1. 
-           // If not, we might try to match by paragraphType or just be conservative.
-           
-           // Heuristic: If we have equal count, map by index.
-           if (paragraphs.length === paragraphRewrites.length) {
-              const rewrite = paragraphRewrites[paraIndex];
-              sentence.relatedParagraphCritique = rewrite.critique;
-              sentence.relatedParagraphRewrite = rewrite.rewrite;
-           } else {
-             // Fallback: Try to guess based on index position (0 -> Intro, last -> Conclusion)
-             // or just leave undefined to avoid mismatch.
-             // Let's try a simpler approach: Map by type keywords if possible, or just use index if it's within bounds.
-             if (paraIndex < paragraphRewrites.length) {
-                 const rewrite = paragraphRewrites[paraIndex];
-                 sentence.relatedParagraphCritique = rewrite.critique;
-                 sentence.relatedParagraphRewrite = rewrite.rewrite;
-             }
-           }
-        }
-      }
-
-      return sentence;
-    });
+  // Extract Paragraph Rewrites
+  const getParagraphRewrites = (): ParagraphRewrite[] => {
+    const rawList = data.paragraphRewrites ?? data.paragraph_feedback ?? data.rewrites ?? [];
+    return safeArr(rawList, (item) => ({
+      critique: safeStr(item.critique ?? item.feedback ?? item.analysis),
+      rewrite: safeStr(item.rewrite ?? item.revised)
+    }));
   };
 
-  const getToolkit = (tk: any): HighScoreToolkit => {
-    const safeTk = safeObj(tk);
+  // Extract Toolkit
+  const getToolkit = (): Toolkit => {
+    const rawTk = data.toolkit ?? {};
+    
     return {
-      essayOutline: safeStr(safeTk.essayOutline),
-      vocabulary: Array.isArray(safeTk.vocabulary) ? safeTk.vocabulary.map((v: any) => ({
-        word: safeStr(v.word),
-        definition: safeStr(v.definition),
-        context: safeStr(v.context)
-      })) : [],
-      grammar: Array.isArray(safeTk.grammar) ? safeTk.grammar.map((g: any) => ({
-        type: safeStr(g.type),
-        example: safeStr(g.example),
-        explanation: safeStr(g.explanation)
-      })) : [],
-      cohesion: Array.isArray(safeTk.cohesion) ? safeTk.cohesion.map((c: any) => ({
-        type: safeStr(c.type),
-        suggestion: safeStr(c.suggestion),
-        example: safeStr(c.example)
-      })) : []
+      essayOutline: safeStr(rawTk.essayOutline ?? rawTk.outline ?? data.outline),
+      vocabulary: safeArr(rawTk.vocabulary ?? data.vocabulary ?? [], (item) => ({
+        word: safeStr(item.word),
+        definition: safeStr(item.definition ?? item.meaning),
+        context: safeStr(item.context ?? item.usage)
+      })),
+      grammar: safeArr(rawTk.grammar ?? data.grammar ?? [], (item) => ({
+        type: safeStr(item.type ?? item.structure),
+        example: safeStr(item.example),
+        explanation: safeStr(item.explanation)
+      })),
+      cohesion: safeArr(rawTk.cohesion ?? data.cohesion ?? [], (item) => ({
+        type: safeStr(item.type),
+        suggestion: safeStr(item.suggestion),
+        example: safeStr(item.example)
+      }))
     };
   };
 
-  const overall = safeNum(data.overallScore ?? data.overall_band, 5.0); // Default overall to 5.0 if missing
-
   return {
-    topic: safeStr(data.topic ?? data.title ?? 'Unknown Topic'),
-    taskType: taskType,
-    overallScore: overall,
+    topic: safeStr(data.topic ?? data.title ?? data.question ?? data.question_text, '未知题目'),
+    overallScore: safeNum(data.overallScore ?? data.overall_band ?? data.totalScore, 0),
+    estimatedWordBand: safeStr(data.estimatedWordBand ?? data.word_level),
+    taskType: data.taskType ?? 'task2',
     dimensions: {
-      taskResponse: getDimension(data.dimensions?.taskResponse ?? data.TR, 'taskResponse', overall),
-      coherenceCohesion: getDimension(data.dimensions?.coherenceCohesion ?? data.CC, 'coherenceCohesion', overall),
-      lexicalResource: getDimension(data.dimensions?.lexicalResource ?? data.LR, 'lexicalResource', overall),
-      grammaticalRangeAccuracy: getDimension(data.dimensions?.grammaticalRangeAccuracy ?? data.GRA, 'grammaticalRangeAccuracy', overall),
+      taskResponse: getDimension(['taskResponse', 'TR', 'tr', 'TA', 'ta', 'taskAchievement']),
+      coherenceCohesion: getDimension(['coherenceCohesion', 'CC', 'cc']),
+      lexicalResource: getDimension(['lexicalResource', 'LR', 'lr']),
+      grammaticalRangeAccuracy: getDimension(['grammaticalRangeAccuracy', 'GRA', 'gra']),
     },
-    paragraphRewrites: paragraphRewrites,
-    toolkit: getToolkit(data.toolkit),
-    referenceEssay: safeStr(data.referenceEssay),
-    correctedSentences: getCorrectedSentences(data.correctedSentences ?? data.corrected_sentences ?? data.corrections), 
-    estimatedWordBand: safeNum(data.estimatedWordBand, 0)
+    correctedSentences: getCorrections(),
+    paragraphRewrites: getParagraphRewrites(),
+    toolkit: getToolkit(),
+    referenceEssay: safeStr(data.referenceEssay ?? data.modelEssay ?? data.sample_answer ?? data.improved_essay)
   };
+}
+
+export function formatEvaluation(raw: any, essayBody?: string, taskType?: string): IELTSReport {
+  const result = safeTransform(raw);
+  // Allow overriding taskType if provided explicitly
+  if (taskType) {
+    result.taskType = taskType as 'task1' | 'task2';
+  }
+  return result;
 }

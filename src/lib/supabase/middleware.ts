@@ -55,17 +55,17 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // If user IS logged in and tries to access /login, redirect to /workshop (default feature page)
+  // If user IS logged in and tries to access /login, redirect to /questions (default feature page)
   if (user && path === '/login') {
     const url = request.nextUrl.clone()
-    url.pathname = '/workshop'
+    url.pathname = '/questions'
     return NextResponse.redirect(url)
   }
   
-  // If user IS logged in and tries to access root /, redirect to /workshop
+  // If user IS logged in and tries to access root /, redirect to /questions
   if (user && path === '/') {
     const url = request.nextUrl.clone()
-    url.pathname = '/workshop'
+    url.pathname = '/questions'
     return NextResponse.redirect(url)
   }
 

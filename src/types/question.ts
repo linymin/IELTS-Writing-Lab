@@ -2,8 +2,9 @@ export type TaskType = 1 | 2;
 
 export interface Question {
   id: string;
-  book_no: number;
-  test_no: number;
+  book_no?: number;
+  test_no?: number;
+  user_id?: string;
   task_type: TaskType;
   question_type: string; // e.g., 'Map', 'Bar Chart', 'Opinion', 'Discussion'
   topic: string; // e.g., 'Environment', 'Education'

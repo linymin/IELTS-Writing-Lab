@@ -8,10 +8,9 @@ export const translations = {
       saved: 'Settings saved successfully!',
     },
     sidebar: {
-      workshop: 'Workshop',
+      diagnostics: 'Diagnostics',
       history: 'History',
       questions: 'Questions',
-      improvement: 'Improvement',
       settings: 'Settings',
       title: 'IELTS Writing Lab',
       signout: 'Sign Out',
@@ -32,10 +31,9 @@ export const translations = {
       saved: '设置保存成功！',
     },
     sidebar: {
-      workshop: '写作练习',
+      diagnostics: '诊断分析',
       history: '历史记录',
       questions: '题库',
-      improvement: '提升建议',
       settings: '设置',
       title: '雅思写作实验室',
       signout: '退出登录',
